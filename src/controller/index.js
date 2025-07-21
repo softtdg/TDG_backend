@@ -540,15 +540,88 @@ async function addSOP(
     "LOCATION/ PURCHASING COMMENTS",
     "LEAD HAND COMMENTS",
   ];
-  worksheet.getRow(7).font = { bold: true, size: 11, name: "Calibri" };
-  worksheet.getRow(7).alignment = {
-    horizontal: "center",
-    vertical: "middle",
-    wrapText: true,
-  };
+  // ✅ FIX: Apply bold font and background cell-by-cell
+  worksheet.getRow(7).eachCell((cell) => {
+    cell.font = { bold: true, size: 18, name: "Calibri" };
+    cell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+      wrapText: true,
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "D9E1F2" },
+    };
+  });
 
   // Set row height to auto
   worksheet.getRow(7).height = undefined; // Let Excel auto-adjust
+
+  // Apply bold borders to header rows (Rows 1 to 5)
+  for (let row = 1; row <= 5; row++) {
+    for (let col = 1; col <= 9; col++) {
+      const cell = worksheet.getRow(row).getCell(col);
+      cell.border = {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" },
+      };
+    }
+  }
+
+  // Apply bold borders to second table (starting from Row 7)
+  for (let row = 7; row <= worksheet.rowCount; row++) {
+    for (let col = 1; col <= 9; col++) {
+      const cell = worksheet.getRow(row).getCell(col);
+      cell.border = {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" },
+      };
+    }
+  }
+  // ✅ FIX: Set background color for specific cells and center alignment
+  [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "G1",
+    "G2",
+    "G3",
+    "G4",
+  ].forEach((cell) => {
+    const currentCell = worksheet.getCell(cell);
+    currentCell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "D9E1F2" }, // Light blue background color
+    };
+    currentCell.alignment = { horizontal: "center", vertical: "middle" };
+    currentCell.font = { bold: true, size: 18, name: "Calibri" };
+  });
+
+  ["I1", "I2", "I3", "I4", "I5"].forEach((cell) => {
+    worksheet.getCell(cell).font = { bold: true, size: 18, name: "Calibri" };
+  });
+
+  // Set the rest of the cells in column I (from I1 to I5) to have center alignment
+  for (let row = 1; row <= 5; row++) {
+    const cell = worksheet.getRow(row).getCell(9); // Column I is the 9th column (index 9)
+    cell.alignment = { horizontal: "center", vertical: "middle" }; // Center alignment
+  }
+
+  // Adjust the width of column I if necessary
+  worksheet.getColumn(9).width = 20; // Adjusting column I width to 20 if needed
 
   // Data rows (starting from Row 8)
   components.forEach((comp, idx) => {
@@ -639,15 +712,6 @@ async function addSOP(
       fgColor: { argb: "FFA9A9A9" },
     };
   }
-
-  // Apply gray background to header row (Row 7)
-  worksheet.getRow(7).eachCell((cell) => {
-    cell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FFD3D3D3" }, // Light gray (same used for INHOUSE/etc.)
-    };
-  });
 
   // Heading styles
   worksheet.getCell("C1").font = { bold: true, size: 18 };
