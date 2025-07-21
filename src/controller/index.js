@@ -93,6 +93,50 @@ const getLeadHandEntry = async (SOPLeadHandEntryId) => {
   }
 };
 
+const getSOPIdtoSopData = async (SOPId) => {
+  try {
+    const pool = await getDbPool("SOP");
+
+    const result = await pool.request().input("SOPId", sql.Int, SOPId).query(`
+        SELECT TOP 1 *
+        FROM [SOP].[dbo].[SOPs]
+        WHERE SOPId = @SOPId
+      `);
+
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    return result.recordset[0];
+  } catch (error) {
+    console.error("❌ Error fetching SOPIdtoSopData:", error);
+    return null;
+  }
+};
+
+const getProgramNameByProgramId = async (SOPProgramId) => {
+  try {
+    const pool = await getDbPool("SOP");
+
+    const result = await pool
+      .request()
+      .input("SOPProgramId", sql.Int, SOPProgramId).query(`
+        SELECT TOP 1 *
+        FROM [SOP].[dbo].[SOPPrograms]
+        WHERE SOPProgramId = @SOPProgramId
+      `);
+
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    return result.recordset[0];
+  } catch (error) {
+    console.error("❌ Error fetching SOPIdtoSopData:", error);
+    return null;
+  }
+};
+
 const fixFixtureName = (fixture) => {
   if (!fixture) {
     return "";
@@ -1017,7 +1061,7 @@ exports.generatePickLists = async (req, res) => {
       return res.badRequest({ message: "Fixture is required" });
     }
 
-    const vm = req.body.vm;// { LHREntries: [..] }
+    const vm = req.body.vm; // { LHREntries: [..] }
     const user = req.body.user || null;
     let fixture = req.body.fixture || null;
 
@@ -1041,15 +1085,19 @@ exports.generatePickLists = async (req, res) => {
         const tempLHREntry = await getLeadHandEntry(LHREntryId);
         fixture = fixFixtureName(tempLHREntry.FixtureNumber);
 
-        // testing
+        tempSOP = tempLHREntry.SOPId;
+        tempSOP = await getSOPIdtoSopData(tempSOP);
+
+        const ProgramName = await getProgramNameByProgramId(
+          tempSOP.SOPProgramId
+        );
+        sopNum = tempSOP.SOPNum;
+        tempQuantity = tempLHREntry.Quantity;
+
         tempSOP = {
-          Program: { Name: "" },
+          Program: { Name: ProgramName.Name },
           ODD: new Date(0), // DateTime.MinValue equivalent
         };
-
-        // tempSOP = tempLHREntry.SOP;
-        // sopNum = tempSOP.SOPNum;
-        tempQuantity = tempLHREntry.Quantity;
       } else {
         tempSOP = {
           Program: { Name: "" },
@@ -1107,11 +1155,10 @@ exports.generatePickLists = async (req, res) => {
 
       console.log("tempSOP-----------------------------------", tempSOP);
 
-      // await addSOP(tempComponents, tempFixture.Description, sopNum, workbook, tempSOP.Program.Name, fixture, tempQuantity, tempSOP.ODD);
       await addSOP(
         tempComponents,
         tempFixture.Description,
-        "SOP-123",
+        sopNum,
         workbook,
         tempSOP.Program.Name,
         fixture,
