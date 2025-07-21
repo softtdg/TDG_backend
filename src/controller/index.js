@@ -459,6 +459,293 @@ const getUserByUsername = async (username) => {
   }
 };
 
+// async function addSOP(
+//   components,
+//   fixtureDescription,
+//   SOP,
+//   workbook,
+//   Project,
+//   Fixture,
+//   Quantity,
+//   RequiredDate
+// ) {
+//   const worksheet = workbook.addWorksheet(SOP, {
+//     pageSetup: {
+//       orientation: "landscape",
+//       fitToPage: true,
+//       fitToWidth: 1,
+//       fitToHeight: 0,
+//     },
+//   });
+
+//   // Format the current date to "Month Day, Year"
+//   const formattedPrintedDate = new Date().toLocaleDateString("en-US", {
+//     year: "numeric",
+//     month: "long",
+//     day: "numeric",
+//   });
+
+//   // Format the required date to "D-MMM-YY" (e.g., 1-Jan-01)
+//   const formattedRequiredDate = RequiredDate
+//     ? new Date(RequiredDate)
+//         .toLocaleDateString("en-GB", {
+//           day: "numeric",
+//           month: "short",
+//           year: "2-digit",
+//         })
+//         .replace(/ /g, "-")
+//     : "";
+
+//   // Insert header rows (Row 1-5)
+//   worksheet.insertRows(1, [
+//     [
+//       "SOP #",
+//       SOP,
+//       `PICK LIST #${SOP}`,
+//       "",
+//       "",
+//       "",
+//       "PICK LIST PRINTED ON",
+//       "",
+//       formattedPrintedDate,
+//     ],
+//     ["PROJECT", Project, "", "", "", "", "PICK LIST LOG NUMBER", "", ""],
+//     ["FIXTURE", Fixture, fixtureDescription, "", "", "", "DATE PICKED", "", ""],
+//     ["QUANTITY", Quantity, "", "", "", "", "LEAD HAND SIGN OFF", "", ""],
+//     ["REQUIRED ON", formattedRequiredDate, "", "", "", "", "", "", ""],
+//   ]);
+
+//   // Merge cells (ExcelJS uses "A1:B1" format)
+//   ["C1:F1", "G1:H1", "G2:H2", "C3:F5", "G3:H3", "G4:H5", "I4:I5"].forEach(range => worksheet.mergeCells(range));
+
+//   // Column widths
+//   const colWidths = [22.28, 69, 22.42, 27, 11.57, 13.28, 20.42, 21.57, 31.57];
+//   colWidths.forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
+
+//   // Table header (Row 7)
+//   worksheet.getRow(7).values = [
+//     "TDG PART NO",
+//     "DESCRIPTION",
+//     "VENDOR",
+//     "VENDOR P/N",
+//     "PER FIX QTY.",
+//     "TOTAL QTY NEEDED",
+//     "ACTUAL QTY PICKED",
+//     "LOCATION/ PURCHASING COMMENTS",
+//     "LEAD HAND COMMENTS",
+//   ];
+//   // ✅ FIX: Apply bold font and background cell-by-cell
+//   worksheet.getRow(7).eachCell((cell) => {
+//     cell.font = { bold: true, size: 18, name: "Calibri" };
+//     cell.alignment = {
+//       horizontal: "center",
+//       vertical: "middle",
+//       wrapText: true,
+//     };
+//     cell.fill = {
+//       type: "pattern",
+//       pattern: "solid",
+//       fgColor: { argb: "D9E1F2" },
+//     };
+//   });
+
+//   // Set row height to auto
+//   worksheet.getRow(7).height = undefined; // Let Excel auto-adjust
+
+//   // Apply bold borders to header rows (Rows 1 to 5)
+//   for (let row = 1; row <= 5; row++) {
+//     for (let col = 1; col <= 9; col++) {
+//       const cell = worksheet.getRow(row).getCell(col);
+//       cell.border = {
+//         top: { style: "thin" },
+//         bottom: { style: "thin" },
+//         left: { style: "thin" },
+//         right: { style: "thin" },
+//       };
+//     }
+//   }
+
+//   // Apply bold borders to second table (starting from Row 7)
+//   for (let row = 7; row <= worksheet.rowCount; row++) {
+//     for (let col = 1; col <= 9; col++) {
+//       const cell = worksheet.getRow(row).getCell(col);
+//       cell.border = {
+//         top: { style: "thin" },
+//         bottom: { style: "thin" },
+//         left: { style: "thin" },
+//         right: { style: "thin" },
+//       };
+//     }
+//   }
+//   // ✅ FIX: Set background color for specific cells and center alignment
+//   [
+//     "A1",
+//     "A2",
+//     "A3",
+//     "A4",
+//     "A5",
+//     "B1",
+//     "B2",
+//     "B3",
+//     "B4",
+//     "B5",
+//     "G1",
+//     "G2",
+//     "G3",
+//     "G4",
+//   ].forEach((cell) => {
+//     const currentCell = worksheet.getCell(cell);
+//     currentCell.fill = {
+//       type: "pattern",
+//       pattern: "solid",
+//       fgColor: { argb: "D9E1F2" }, // Light blue background color
+//     };
+//     currentCell.alignment = { horizontal: "center", vertical: "middle" };
+//     currentCell.font = { bold: true, size: 18, name: "Calibri" };
+//   });
+
+//   ["I1", "I2", "I3", "I4", "I5"].forEach((cell) => {
+//     worksheet.getCell(cell).font = { bold: true, size: 18, name: "Calibri" };
+//   });
+
+//   // Set the rest of the cells in column I (from I1 to I5) to have center alignment
+//   for (let row = 1; row <= 5; row++) {
+//     const cell = worksheet.getRow(row).getCell(9); // Column I is the 9th column (index 9)
+//     cell.alignment = { horizontal: "center", vertical: "middle" }; // Center alignment
+//   }
+
+//   // Adjust the width of column I if necessary
+//   worksheet.getColumn(9).width = 20; // Adjusting column I width to 20 if needed
+
+//   // Data rows (starting from Row 8)
+//   components.forEach((comp, idx) => {
+//     const rowIdx = idx + 8;
+//     const descParts = (comp.Description || "").split("<line>");
+//     const goesInto = descParts[0] ? `GOES INTO ${descParts[0]}` : "";
+//     const restDesc = descParts[1] || "";
+//     const fullDesc = goesInto ? `${goesInto}\n${restDesc}` : restDesc;
+
+//     worksheet.getRow(rowIdx).values = [
+//       comp.TDGPN,
+//       fullDesc,
+//       comp.Vendor,
+//       comp.VendorPN,
+//       comp.QuantityPerFixture,
+//       { formula: `\$B\$4*E${rowIdx}`, result: comp.QuantityNeeded || 0 },
+//       "",
+//       comp.Location,
+//       comp.LeadHandComments,
+//     ];
+
+//     // Alignment & font styling
+//     ["A", "C", "D", "E", "F"].forEach((col) => {
+//       worksheet.getCell(`${col}${rowIdx}`).alignment = { horizontal: "center" };
+//     });
+
+//     worksheet.getCell(`B${rowIdx}`).alignment = { wrapText: true };
+//     worksheet.getCell(`A${rowIdx}`).font = { bold: true };
+//     ["E", "F", "G", "H"].forEach((col) => {
+//       worksheet.getCell(`${col}${rowIdx}`).font = { bold: true };
+//     });
+
+//     // // Red fill if short
+//     const quantity = comp.QuantityNeeded || 0;
+//     const available = comp.QuantityAvailable || 0;
+
+//     const isShort = quantity > available && !comp.ConsumableOrVMI;
+//     if (isShort) {
+//       worksheet.getCell(`F${rowIdx}`).fill = {
+//         type: "pattern",
+//         pattern: "solid",
+//         fgColor: { argb: "FFFFC0CB" }, // Light pink
+//       };
+//     }
+
+//     // Gray fill for INHOUSE/VMI/etc
+//     const loc = (comp.Location || "").toUpperCase();
+//     const isGray =
+//       loc.includes("INHOUSE") ||
+//       loc.includes("CONSUMABLE") ||
+//       (loc.includes("V") && !loc.includes("HV")) ||
+//       quantity === 0;
+//     if (isGray) {
+//       for (let col = 1; col <= 9; col++) {
+//         worksheet.getRow(rowIdx).getCell(col).fill = {
+//           type: "pattern",
+//           pattern: "solid",
+//           fgColor: { argb: "FFD3D3D3" },
+//         };
+//       }
+//     }
+//   });
+
+//   const startRow = 8;
+//   const endRow = startRow + components.length - 1;
+
+//   // Table borders
+//   for (let r = startRow; r <= endRow; r++) {
+//     for (let c = 1; c <= 9; c++) {
+//       const cell = worksheet.getRow(r).getCell(c);
+//       cell.border = {
+//         top: { style: "thin" },
+//         bottom: { style: "thin" },
+//         left: { style: "thin" },
+//         right: { style: "thin" },
+//       };
+//       cell.alignment = { wrapText: true, vertical: "middle" };
+//       cell.font = { size: 18 };
+//     }
+//   }
+
+//   // Final gray row
+//   const finalRowIdx = endRow + 1;
+//   for (let col = 1; col <= 9; col++) {
+//     worksheet.getRow(finalRowIdx).getCell(col).fill = {
+//       type: "pattern",
+//       pattern: "solid",
+//       fgColor: { argb: "FFA9A9A9" },
+//     };
+//   }
+
+//   // Heading styles
+//   worksheet.getCell("C1").font = { bold: true, size: 18 };
+//   worksheet.getCell("C3").font = { size: 18 };
+//   worksheet.getCell("C1").alignment = { horizontal: "center", vertical: "top" };
+
+//   // Header alignment
+//   ["A1", "A2", "A3", "A4", "A5"].forEach((cell) => {
+//     worksheet.getCell(cell).alignment = { horizontal: "left" };
+//   });
+//   ["B1", "B2", "B3", "B4", "B5"].forEach((cell) => {
+//     worksheet.getCell(cell).alignment = { horizontal: "right" };
+//   });
+//   [
+//     "G1",
+//     "G2",
+//     "G3",
+//     "G4",
+//     "G5",
+//     "H1",
+//     "H2",
+//     "H3",
+//     "H4",
+//     "H5",
+//     "I4",
+//     "I5",
+//   ].forEach((cell) => {
+//     worksheet.getCell(cell).alignment = { horizontal: "center" };
+//   });
+//   ["C1", "C2", "C3", "C4", "C5"].forEach((cell) => {
+//     worksheet.getCell(cell).alignment = {
+//       horizontal: "center",
+//       vertical: "top",
+//     };
+//   });
+
+//   // Hide grid lines
+//   worksheet.views = [{ showGridLines: false }];
+// }
+
 async function addSOP(
   components,
   fixtureDescription,
@@ -515,21 +802,18 @@ async function addSOP(
     ["REQUIRED ON", formattedRequiredDate, "", "", "", "", "", "", ""],
   ]);
 
-  // Merge cells (ExcelJS uses "A1:B1" format)
-  worksheet.mergeCells("C1:F1");
-  worksheet.mergeCells("G1:H1");
-  worksheet.mergeCells("G2:H2");
-  worksheet.mergeCells("C3:F5");
-  worksheet.mergeCells("G3:H3");
-  worksheet.mergeCells("G4:H5");
-  worksheet.mergeCells("I4:I5");
+  // Merges
+  ["C1:F1", "G1:H1", "G2:H2", "C3:F5", "G3:H3", "G4:H5", "I4:I5"].forEach(
+    (range) => worksheet.mergeCells(range)
+  );
 
   // Column widths
-  const colWidths = [22.28, 69, 22.42, 27, 11.57, 13.28, 20.42, 21.57, 31.57];
-  colWidths.forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
+  [22.28, 69, 22.42, 27, 11.57, 13.28, 20.42, 21.57, 31.57].forEach(
+    (w, i) => (worksheet.getColumn(i + 1).width = w)
+  );
 
-  // Table header (Row 7)
-  worksheet.getRow(7).values = [
+  // Row 7 headers
+  const headers = [
     "TDG PART NO",
     "DESCRIPTION",
     "VENDOR",
@@ -540,7 +824,8 @@ async function addSOP(
     "LOCATION/ PURCHASING COMMENTS",
     "LEAD HAND COMMENTS",
   ];
-  // ✅ FIX: Apply bold font and background cell-by-cell
+  worksheet.getRow(7).values = headers;
+  worksheet.getRow(7).height = undefined;
   worksheet.getRow(7).eachCell((cell) => {
     cell.font = { bold: true, size: 18, name: "Calibri" };
     cell.alignment = {
@@ -555,13 +840,10 @@ async function addSOP(
     };
   });
 
-  // Set row height to auto
-  worksheet.getRow(7).height = undefined; // Let Excel auto-adjust
-
-  // Apply bold borders to header rows (Rows 1 to 5)
-  for (let row = 1; row <= 5; row++) {
-    for (let col = 1; col <= 9; col++) {
-      const cell = worksheet.getRow(row).getCell(col);
+  // Apply borders and fonts to header rows
+  for (let r = 1; r <= 5; r++) {
+    for (let c = 1; c <= 9; c++) {
+      const cell = worksheet.getRow(r).getCell(c);
       cell.border = {
         top: { style: "thin" },
         bottom: { style: "thin" },
@@ -583,100 +865,95 @@ async function addSOP(
       };
     }
   }
-  // ✅ FIX: Set background color for specific cells and center alignment
-  [
-    "A1",
-    "A2",
-    "A3",
-    "A4",
-    "A5",
-    "B1",
-    "B2",
-    "B3",
-    "B4",
-    "B5",
-    "G1",
-    "G2",
-    "G3",
-    "G4",
-  ].forEach((cell) => {
-    const currentCell = worksheet.getCell(cell);
-    currentCell.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "D9E1F2" }, // Light blue background color
+
+  // Font + fill for header info cells
+  const headerFontCells = ["A", "B", "G"].flatMap((col) =>
+    [1, 2, 3, 4].map((row) => `${col}${row}`)
+  );
+  headerFontCells
+    .concat(["A5", "B5", "I1", "I2", "I3", "I4", "I5"])
+    .forEach((cell) => {
+      const c = worksheet.getCell(cell);
+      c.font = { bold: true, size: 18, name: "Calibri" };
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      if (
+        cell.startsWith("A") ||
+        cell.startsWith("B") ||
+        cell.startsWith("G")
+      ) {
+        c.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "D9E1F2" },
+        };
+      }
+    });
+
+  for (let r = 1; r <= 5; r++) {
+    worksheet.getCell(`I${r}`).alignment = {
+      horizontal: "center",
+      vertical: "middle",
     };
-    currentCell.alignment = { horizontal: "center", vertical: "middle" };
-    currentCell.font = { bold: true, size: 18, name: "Calibri" };
-  });
-
-  ["I1", "I2", "I3", "I4", "I5"].forEach((cell) => {
-    worksheet.getCell(cell).font = { bold: true, size: 18, name: "Calibri" };
-  });
-
-  // Set the rest of the cells in column I (from I1 to I5) to have center alignment
-  for (let row = 1; row <= 5; row++) {
-    const cell = worksheet.getRow(row).getCell(9); // Column I is the 9th column (index 9)
-    cell.alignment = { horizontal: "center", vertical: "middle" }; // Center alignment
   }
+  worksheet.getColumn(9).width = 20;
 
-  // Adjust the width of column I if necessary
-  worksheet.getColumn(9).width = 20; // Adjusting column I width to 20 if needed
-
-  // Data rows (starting from Row 8)
-  components.forEach((comp, idx) => {
-    const rowIdx = idx + 8;
+  // Data rows
+  components.forEach((comp, i) => {
+    const row = worksheet.getRow(i + 8);
     const descParts = (comp.Description || "").split("<line>");
-    const goesInto = descParts[0] ? `GOES INTO ${descParts[0]}` : "";
-    const restDesc = descParts[1] || "";
-    const fullDesc = goesInto ? `${goesInto}\n${restDesc}` : restDesc;
+    const fullDesc = descParts[0]
+      ? `GOES INTO ${descParts[0]}\n${descParts[1] || ""}`
+      : descParts[1] || "";
 
-    worksheet.getRow(rowIdx).values = [
+    row.values = [
       comp.TDGPN,
       fullDesc,
       comp.Vendor,
       comp.VendorPN,
       comp.QuantityPerFixture,
-      { formula: `\$B\$4*E${rowIdx}`, result: comp.QuantityNeeded || 0 },
+      { formula: `\$B\$4*E${i + 8}`, result: comp.QuantityNeeded || 0 },
       "",
       comp.Location,
       comp.LeadHandComments,
     ];
 
-    // Alignment & font styling
-    ["A", "C", "D", "E", "F"].forEach((col) => {
-      worksheet.getCell(`${col}${rowIdx}`).alignment = { horizontal: "center" };
-    });
-
-    worksheet.getCell(`B${rowIdx}`).alignment = { wrapText: true };
-    worksheet.getCell(`A${rowIdx}`).font = { bold: true };
-    ["E", "F", "G", "H"].forEach((col) => {
-      worksheet.getCell(`${col}${rowIdx}`).font = { bold: true };
-    });
-
-    // // Red fill if short
-    const quantity = comp.QuantityNeeded || 0;
-    const available = comp.QuantityAvailable || 0;
-
-    const isShort = quantity > available && !comp.ConsumableOrVMI;
-    if (isShort) {
-      worksheet.getCell(`F${rowIdx}`).fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFC0CB" }, // Light pink
+    for (let c = 1; c <= 9; c++) {
+      const cell = row.getCell(c);
+      // Apply normal font for B, C, D; bold for others
+      const isNormalFont = c === 2 || c === 3 || c === 4;
+      cell.font = { size: 18, name: "Calibri", bold: !isNormalFont };
+      cell.alignment = {
+        wrapText: true,
+        vertical: "middle",
+        ...(c <= 6 && c !== 2 ? { horizontal: "center" } : {}),
+      };
+      cell.border = {
+        top: { style: "thin" },
+        bottom: { style: "thin" },
+        left: { style: "thin" },
+        right: { style: "thin" },
       };
     }
 
-    // Gray fill for INHOUSE/VMI/etc
+    const qty = comp.QuantityNeeded || 0;
+    const available = comp.QuantityAvailable || 0;
+    if (qty > available && !comp.ConsumableOrVMI) {
+      row.getCell(6).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFFFC0CB" },
+      };
+    }
+
     const loc = (comp.Location || "").toUpperCase();
     const isGray =
       loc.includes("INHOUSE") ||
       loc.includes("CONSUMABLE") ||
       (loc.includes("V") && !loc.includes("HV")) ||
-      quantity === 0;
+      qty === 0;
     if (isGray) {
-      for (let col = 1; col <= 9; col++) {
-        worksheet.getRow(rowIdx).getCell(col).fill = {
+      for (let c = 1; c <= 9; c++) {
+        row.getCell(c).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFD3D3D3" },
@@ -685,76 +962,62 @@ async function addSOP(
     }
   });
 
-  const startRow = 8;
-  const endRow = startRow + components.length - 1;
-
-  // Table borders
-  for (let r = startRow; r <= endRow; r++) {
-    for (let c = 1; c <= 9; c++) {
-      const cell = worksheet.getRow(r).getCell(c);
-      cell.border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" },
-      };
-      cell.alignment = { wrapText: true, vertical: "middle" };
-      cell.font = { size: 18 };
-    }
-  }
-
   // Final gray row
-  const finalRowIdx = endRow + 1;
-  for (let col = 1; col <= 9; col++) {
-    worksheet.getRow(finalRowIdx).getCell(col).fill = {
+  const finalRow = worksheet.getRow(components.length + 8);
+  for (let c = 1; c <= 9; c++) {
+    finalRow.getCell(c).fill = {
       type: "pattern",
       pattern: "solid",
       fgColor: { argb: "FFA9A9A9" },
     };
   }
 
-  // Heading styles
+  // Heading font + alignment
   worksheet.getCell("C1").font = { bold: true, size: 18 };
-  worksheet.getCell("C3").font = { size: 18 };
   worksheet.getCell("C1").alignment = { horizontal: "center", vertical: "top" };
+  worksheet.getCell("C3").font = { size: 18 };
+  ["A", "B"].forEach((col) =>
+    [1, 2, 3, 4, 5].forEach(
+      (row) =>
+        (worksheet.getCell(`${col}${row}`).alignment = {
+          horizontal: col === "A" ? "left" : "right",
+        })
+    )
+  );
+  ["G", "H"].forEach((col) =>
+    [1, 2, 3, 4, 5].forEach(
+      (row) =>
+        (worksheet.getCell(`${col}${row}`).alignment = { horizontal: "center" })
+    )
+  );
+  ["C1", "C2", "C3", "C4", "C5"].forEach(
+    (cell) =>
+      (worksheet.getCell(cell).alignment = {
+        horizontal: "center",
+        vertical: "top",
+      })
+  );
 
-  // Header alignment
-  ["A1", "A2", "A3", "A4", "A5"].forEach((cell) => {
-    worksheet.getCell(cell).alignment = { horizontal: "left" };
-  });
-  ["B1", "B2", "B3", "B4", "B5"].forEach((cell) => {
-    worksheet.getCell(cell).alignment = { horizontal: "right" };
-  });
-  [
-    "G1",
-    "G2",
-    "G3",
-    "G4",
-    "G5",
-    "H1",
-    "H2",
-    "H3",
-    "H4",
-    "H5",
-    "I4",
-    "I5",
-  ].forEach((cell) => {
-    worksheet.getCell(cell).alignment = { horizontal: "center" };
-  });
-  ["C1", "C2", "C3", "C4", "C5"].forEach((cell) => {
-    worksheet.getCell(cell).alignment = {
-      horizontal: "center",
-      vertical: "top",
-    };
-  });
-
-  // Hide grid lines
   worksheet.views = [{ showGridLines: false }];
 }
 
 exports.generatePickLists = async (req, res) => {
   try {
-    const vm = req.body.vm; // { LHREntries: [..] }
+    if (!req.body.vm || !Array.isArray(req.body.vm.LHREntries)) {
+      return res.badRequest({
+        message: "Missing or invalid 'vm.LHREntries' in request body",
+      });
+    }
+
+    if (!req.body.user) {
+      return res.badRequest({ message: "User is required" });
+    }
+
+    if (!req.body.fixture) {
+      return res.badRequest({ message: "Fixture is required" });
+    }
+
+    const vm = req.body.vm;// { LHREntries: [..] }
     const user = req.body.user || null;
     let fixture = req.body.fixture || null;
 
