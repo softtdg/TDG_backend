@@ -1047,23 +1047,9 @@ async function addSOP(
 
 exports.generatePickLists = async (req, res) => {
   try {
-    if (!req.body.vm || !Array.isArray(req.body.vm.LHREntries)) {
-      return res.badRequest({
-        message: "Missing or invalid 'vm.LHREntries' in request body",
-      });
-    }
-
-    if (!req.body.user) {
-      return res.badRequest({ message: "User is required" });
-    }
-
-    if (!req.body.fixture) {
-      return res.badRequest({ message: "Fixture is required" });
-    }
-
-    const vm = req.body.vm; // { LHREntries: [..] }
-    const user = req.body.user || null;
-    let fixture = req.body.fixture || null;
+    const vm = req?.body?.vm || { LHREntries: [] };
+    const user = req?.body?.user || "";
+    let fixture = req?.body?.fixture || "";
 
     let sopNum = "-";
     const ml = await getMasterList();
@@ -1184,8 +1170,8 @@ exports.generatePickLists = async (req, res) => {
     // Format: "-(fixture) Jul-24.xlsx"
     const now = new Date();
     const month = now.toLocaleString("en-US", { month: "short" });
-    const year = now.getFullYear().toString().slice(-2);
-    const dateStr = `${month}-${year}`;
+    const day = String(now.getDate()).padStart(2, "0");
+    const dateStr = `${month}-${day}`;
     const safeFixture = fixture.replace(/[\\/:*?"<>|]/g, "-"); // Avoid filename issues
     const fileName = `-(${safeFixture}) ${dateStr}.xlsx`;
 
