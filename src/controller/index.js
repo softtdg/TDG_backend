@@ -1153,8 +1153,6 @@ exports.generatePickLists = async (req, res) => {
         })
       );
 
-      console.log("tempSOP-----------------------------------", tempSOP);
-
       await addSOP(
         tempComponents,
         tempFixture.Description,
@@ -1183,16 +1181,24 @@ exports.generatePickLists = async (req, res) => {
     // ✅ Place these lines at the end of your controller function:
     const buffer = await workbook.xlsx.writeBuffer();
 
+    // Format: "-(fixture) Jul-24.xlsx"
+    const now = new Date();
+    const month = now.toLocaleString("en-US", { month: "short" });
+    const year = now.getFullYear().toString().slice(-2);
+    const dateStr = `${month}-${year}`;
+    const safeFixture = fixture.replace(/[\\/:*?"<>|]/g, "-"); // Avoid filename issues
+    const fileName = `-(${safeFixture}) ${dateStr}.xlsx`;
+
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="PickList.xlsx"'
+      `attachment; filename=\"${fileName}\"`
     );
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
     res.send(buffer);
-    res.end();
+    // Do not send a JSON response after sending the file buffer
   } catch (err) {
     console.error("Error generating picklists:", err);
     res.status(500).send("Error generating picklists");

@@ -1,42 +1,92 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Download PickList</title>
-</head>
-<body>
-  <button onclick="downloadPickList()">Download Pick List</button>
+  <head>
+    <title>Download PickList</title>
+  </head>
+  <body>
+    <button onclick="downloadPickList()">Download Pick List</button>
 
-  <script>
-    async function downloadPickList() {
-      try {
-        const res = await fetch('http://localhost:3000/api/generatePickLists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            vm: { LHREntries: [2] },
-            user: "john.doe",
-            fixture: "190-100-2111"
-          })
-        });
+    <script>
+      // async function downloadPickList() {
+      //   try {
+      // const payload = {
+      //   vm: { LHREntries: [3] },
+      //   user: "john.doe",
+      //   fixture: "190-100-1889"
+      // };
+      //     const res = await fetch('http://localhost:3000/api/generatePickLists', {
+      //       method: 'POST',
+      //       headers: { 'Content-Type': 'application/json' },
+      //       body: JSON.stringify(payload)
+      //     });
 
-        if (!res.ok) {
-          const errorText = await res.text();
-          console.error('Server error:', errorText);
-          return;
+      //     if (!res.ok) {
+      //       const errorText = await res.text();
+      //       console.error('Server error:', errorText);
+      //       return;
+      //     }
+
+      //     const blob = await res.blob();
+      //     const url = URL.createObjectURL(blob);
+      //     const a = document.createElement('a');
+      //     a.href = url;
+      //     // Get fixture from the payload
+      //     const fixture = payload.fixture;
+      //     // Get current month and year in 'MMM-YY' format
+      //     const now = new Date();
+      //     const month = now.toLocaleString('default', { month: 'short' });
+      //     const year = now.getFullYear().toString().slice(-2);
+      //     const dateStr = `${month}-${year}`;
+      //     a.download = `-(${fixture}) ${dateStr}.xlsx`;
+      //     document.body.appendChild(a);
+      //     a.click();
+      //     a.remove();
+      //   } catch (err) {
+      //     console.error('Download failed:', err);
+      //   }
+      // }
+
+      async function downloadPickList() {
+        try {
+          const response = await fetch(
+            "http://localhost:3000/api/generatePickLists",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                vm: { LHREntries: [3] },
+                user: "john.doe",
+                fixture: "190-100-1889",
+              }),
+            }
+          );
+
+          if (!response.ok) throw new Error("Failed to generate file");
+
+          console.log("response", response);
+          const blob = await response.blob();
+          const filename =
+            getFileNameFromHeader(
+              response.headers.get("Content-Disposition")
+            ) || "PickList.xlsx";
+
+          const link = document.createElement("a");
+          link.href = window.URL.createObjectURL(blob);
+          link.download = filename;
+          link.click();
+        } catch (err) {
+          console.error("Download error:", err);
+          alert("Failed to download the pick list.");
         }
-
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'PickList.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } catch (err) {
-        console.error('Download failed:', err);
       }
-    }
-  </script>
-</body>
+
+      function getFileNameFromHeader(disposition) {
+        if (!disposition) return null;
+        const match = disposition.match(/filename="(.+)"/);
+        return match ? match[1] : null;
+      }
+    </script>
+  </body>
 </html>
