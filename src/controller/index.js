@@ -1297,26 +1297,38 @@ exports.SOPSerchService = async (req, res) => {
         WHERE SOPId = @SOPId
       `);
 
-    // here multiple fixture exixts-----------------------------------------------------------------------------------------
-    const sopAssemblerId = fixtureResults?.recordset[0]?.SOPAssemblerId;
-    const fixtureName = fixtureResults?.recordset[0]?.FixtureNumber;
-
-    const assemblerIdResult = await pool
-      .request()
-      .input("SOPAssemblerId", sql.Int, sopAssemblerId).query(`
-        SELECT *
-        FROM [SOP].[dbo].[SOPAssemblers]
-        WHERE SOPAssemblerId = @SOPAssemblerId
-      `);
 
     const db = await connectDB("BOMs");
     const collection = db.collection("Fixture");
 
-    // Demo: Get all documents
-    const fixtureMongoData = await collection
-      .find({ Name: fixtureName })
-      .limit(10)
-      .toArray();
+    // Process all fixtures
+    const fixturesDetailed = await Promise.all(
+      fixtureResults.recordset.map(async (fixture) => {
+        // Get assembler for this fixture
+        let assemblerIdResult = { recordset: [] };
+        if (fixture.SOPAssemblerId) {
+          assemblerIdResult = await pool
+            .request()
+            .input("SOPAssemblerId", sql.Int, fixture.SOPAssemblerId).query(`
+              SELECT *
+              FROM [SOP].[dbo].[SOPAssemblers]
+              WHERE SOPAssemblerId = @SOPAssemblerId
+            `);
+        }
+
+        // Get MongoDB data for this fixture
+        const fixtureMongoData = await collection
+          .find({ Name: fixture.FixtureNumber })
+          .limit(10)
+          .toArray();
+
+        return {
+          ...fixture,
+          assembler: assemblerIdResult.recordset,
+          fixtureMongoData,
+        };
+      })
+    );
 
     const responseData = {
       ...sopNumberResult,
@@ -1328,9 +1340,7 @@ exports.SOPSerchService = async (req, res) => {
       leadHand: leadHandResult.recordset,
       qaEntry: qaEntryResult.recordset,
       shippingEntry: shippingEntryResult.recordset,
-      fixture: fixtureResults.recordset,
-      assembler: assemblerIdResult.recordset,
-      fixtureMongoData: fixtureMongoData,
+      fixtures: fixturesDetailed, // <-- now an array of detailed fixture info
     };
 
     return res.ok({
