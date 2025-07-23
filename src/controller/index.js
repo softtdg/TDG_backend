@@ -1186,7 +1186,159 @@ exports.generatePickLists = async (req, res) => {
     res.send(buffer);
     // Do not send a JSON response after sending the file buffer
   } catch (err) {
-    console.error("Error generating picklists:", err);
-    res.status(500).send("Error generating picklists");
+    return res.failureResponse({ message: err.message });
+  }
+};
+
+exports.SOPSerchService = async (req, res) => {
+  try {
+    if (!req.query.SOPNumber) {
+      return res.badRequest({ message: "SOP ID is required" });
+    }
+
+    const { SOPNumber } = req.query;
+
+    const pool = await getDbPool("SOP");
+
+    let sopNumberResult = await pool
+      .request()
+      .input("SOPNumber", sql.NVarChar, SOPNumber).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPs]
+        WHERE SOPNum = @SOPNumber
+      `);
+
+    if (sopNumberResult.recordset.length === 0) {
+      return res.badRequest({ message: "SOP not found" });
+    }
+
+    sopNumberResult = sopNumberResult.recordset[0];
+
+    const customerResult = await pool
+      .request()
+      .input("SOPCustomerId", sql.Int, sopNumberResult.SOPCustomerId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPCustomers]
+        WHERE SOPCustomerId = @SOPCustomerId
+      `);
+
+    const programResult = await pool
+      .request()
+      .input("SOPProgramId", sql.Int, sopNumberResult.SOPProgramId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPPrograms]
+        WHERE SOPProgramId = @SOPProgramId
+      `);
+
+    const locationResult = await pool
+      .request()
+      .input("SOPLocationId", sql.Int, sopNumberResult.SOPLocationId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPLocations]
+        WHERE SOPLocationId = @SOPLocationId
+      `);
+
+    const sopProductionManagerResult = await pool
+      .request()
+      .input(
+        "SOPProductionManagerId",
+        sql.Int,
+        sopNumberResult.SOPProductionManagerId
+      ).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPProductionManagers]
+        WHERE SOPProductionManagerId = @SOPProductionManagerId
+      `);
+
+    const productionEntryResult = await pool
+      .request()
+      .input(
+        "SOPProductionEntryId",
+        sql.Int,
+        sopNumberResult.SOPProductionEntryId
+      ).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPProductionEntries] 
+        WHERE SOPProductionEntryId = @SOPProductionEntryId
+      `);
+
+    const sopLeadHandId = productionEntryResult.recordset[0].SOPLeadHandId;
+
+    const leadHandResult = await pool
+      .request()
+      .input("SOPLeadHandId", sql.Int, sopLeadHandId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPLeadHands] 
+        WHERE SOPLeadHandId = @SOPLeadHandId
+      `);
+
+    const qaEntryResult = await pool
+      .request()
+      .input("SOPQAEntryId", sql.Int, sopNumberResult.SOPQAEntryId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPQAEntries]
+        WHERE SOPQAEntryId = @SOPQAEntryId
+      `);
+
+    const shippingEntryResult = await pool
+      .request()
+      .input("SOPShippingEntryId", sql.Int, sopNumberResult.SOPShippingEntryId)
+      .query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPShippingEntries]
+        WHERE SOPShippingEntryId = @SOPShippingEntryId
+      `);
+
+    const fixtureResults = await pool
+      .request()
+      .input("SOPId", sql.Int, sopNumberResult.SOPId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPLeadHandEntries]
+        WHERE SOPId = @SOPId
+      `);
+
+    // here multiple fixture exixts-----------------------------------------------------------------------------------------
+    const sopAssemblerId = fixtureResults?.recordset[0]?.SOPAssemblerId;
+    const fixtureName = fixtureResults?.recordset[0]?.FixtureNumber;
+
+    const assemblerIdResult = await pool
+      .request()
+      .input("SOPAssemblerId", sql.Int, sopAssemblerId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPAssemblers]
+        WHERE SOPAssemblerId = @SOPAssemblerId
+      `);
+
+    const db = await connectDB("BOMs");
+    const collection = db.collection("Fixture");
+
+    // Demo: Get all documents
+    const fixtureMongoData = await collection
+      .find({ Name: fixtureName })
+      .limit(10)
+      .toArray();
+
+    const responseData = {
+      ...sopNumberResult,
+      customer: customerResult.recordset,
+      program: programResult.recordset,
+      location: locationResult.recordset,
+      sopProductionManager: sopProductionManagerResult.recordset,
+      productionEntry: productionEntryResult.recordset,
+      leadHand: leadHandResult.recordset,
+      qaEntry: qaEntryResult.recordset,
+      shippingEntry: shippingEntryResult.recordset,
+      fixture: fixtureResults.recordset,
+      assembler: assemblerIdResult.recordset,
+      fixtureMongoData: fixtureMongoData,
+    };
+
+    return res.ok({
+      message: "Successfully fetched SOP data",
+      data: responseData,
+    });
+  } catch (err) {
+    console.log("error:", err);
+    return res.failureResponse({ message: err.message });
   }
 };
