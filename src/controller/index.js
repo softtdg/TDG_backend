@@ -1190,6 +1190,57 @@ exports.generatePickLists = async (req, res) => {
   }
 };
 
+const getOpenPickLists = async (fixtureNumber) => {
+  try {
+    let fixtureLists = [];
+
+    const pool = await getDbPool("SOP");
+
+    const retriveAllFixturesResult = await pool
+      .request()
+      .input("FixtureNumber", sql.NVarChar, fixtureNumber).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPLeadHandEntries]
+        WHERE FixtureNumber = @FixtureNumber
+      `);
+
+    if (retriveAllFixturesResult.recordset.length === 0) {
+      return fixtureLists;
+    }
+
+    const result = await pool
+      .request()
+      .input("fixture", sql.VarChar, fixtureNumber.toUpperCase()).query(`
+    SELECT 
+        sle.*, 
+        s.FinalDeliveryDate,
+        s.SOPNum,
+        s.ODD, 
+        spe.ProductionDateOut,
+        she.ShippingDateIn
+    FROM [SOP].[dbo].[SOPLeadHandEntries] sle
+    JOIN [SOP].[dbo].[SOPs] s 
+        ON sle.SOPId = s.SOPId
+    JOIN [SOP].[dbo].[SOPProductionEntries] spe 
+        ON s.SOPProductionEntryId = spe.SOPProductionEntryId
+    JOIN [SOP].[dbo].[SOPShippingEntries] she 
+        ON s.SOPShippingEntryId = she.SOPShippingEntryId
+    WHERE 
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(sle.FixtureNumber), '-WAR', ''), 'WAR', ''), '-RPR', ''), 'RPR', ''), '-EVAL', ''), 'EVAL', '') = UPPER(@fixture) AND
+        UPPER(s.SOPNum) <> 'CANCELLED' AND
+        spe.ProductionDateOut = '0001-01-01' AND
+        she.ShippingDateIn = '0001-01-01' AND
+        s.FinalDeliveryDate = '0001-01-01'
+    ORDER BY s.ODD;
+  `);
+
+    return result.recordset;
+  } catch (err) {
+    console.log("error:", err);
+    return res.failureResponse({ message: err.message });
+  }
+};
+
 exports.SOPSerchService = async (req, res) => {
   try {
     if (!req.query.SOPNumber) {
@@ -1297,7 +1348,6 @@ exports.SOPSerchService = async (req, res) => {
         WHERE SOPId = @SOPId
       `);
 
-
     const db = await connectDB("BOMs");
     const collection = db.collection("Fixture");
 
@@ -1346,6 +1396,36 @@ exports.SOPSerchService = async (req, res) => {
     return res.ok({
       message: "Successfully fetched SOP data",
       data: responseData,
+    });
+  } catch (err) {
+    console.log("error:", err);
+    return res.failureResponse({ message: err.message });
+  }
+};
+
+exports.fixtureDetails = async (req, res) => {
+  try {
+    const { fixtureNumber } = req.query;
+
+    const fixedFixtureNumber = fixFixtureName(fixtureNumber);
+
+    const db = await connectDB("BOMs");
+    const collection = db.collection("Fixture");
+    // Get MongoDB data for this fixture
+    const fixtureMongoData = await collection
+      .find({ Name: fixedFixtureNumber })
+      .limit(10)
+      .toArray();
+
+    if (fixtureMongoData.length === 0) {
+      return res.badRequest({ message: "Fixture not found" });
+    }
+
+    const openPickLists = await getOpenPickLists(fixtureNumber);
+
+    return res.ok({
+      message: "Successfully fetched fixture details",
+      data: openPickLists,
     });
   } catch (err) {
     console.log("error:", err);
