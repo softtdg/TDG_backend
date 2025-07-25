@@ -49,17 +49,13 @@
       async function downloadPickList() {
         try {
           const response = await fetch(
-            "http://localhost:3000/api/generatePickLists",
+            // "http://localhost:3000/api/downloadPickList?fixture=190-100-1363&user=om",
+            "http://localhost:3000/api/downloadPickList?lhrEntryId=16165&user=om",
             {
-              method: "POST",
+              method: "GET",
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({
-                vm: { LHREntries: [3] },
-                user: "john.doe",
-                fixture: "190-100-1889",
-              }),
             }
           );
 

@@ -945,21 +945,29 @@ async function addSOP(
   components.forEach((comp, i) => {
     const row = worksheet.getRow(i + 8);
     const descParts = (comp.Description || "").split("<line>");
-    const fullDesc = descParts[0]
-      ? `GOES INTO ${descParts[0]}\n${descParts[1] || ""}`
+    const parent = descParts[0];
+    const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN; // adjust as needed
+
+    const fullDesc = parent
+      ? `GOES INTO ${parent}\n${descParts[1] || ""}`
       : descParts[1] || "";
 
-    row.values = [
-      comp.TDGPN,
-      fullDesc,
-      comp.Vendor,
-      comp.VendorPN,
-      comp.QuantityPerFixture,
-      { formula: `\$B\$4*E${i + 8}`, result: comp.QuantityNeeded || 0 },
-      "",
-      comp.Location,
-      comp.LeadHandComments,
-    ];
+      row.values = [
+        comp.TDGPN,
+        fullDesc,
+        comp.Vendor,
+        comp.VendorPN,
+        comp.QuantityPerFixture,
+        isTopLevel
+          ? {
+              formula: `$B$4*E${i + 8}`,
+              result: comp.QuantityPerFixture * Quantity,
+            }
+          : comp.QuantityPerFixture, // just show the value for child/sub rows
+        "",
+        comp.Location,
+        comp.LeadHandComments,
+      ];
 
     for (let c = 1; c <= 9; c++) {
       const cell = row.getCell(c);
@@ -1045,11 +1053,12 @@ async function addSOP(
   worksheet.views = [{ showGridLines: false }];
 }
 
-exports.generatePickLists = async (req, res) => {
+const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
   try {
-    const vm = req?.body?.vm || { LHREntries: [] };
-    const user = req?.body?.user || "";
-    let fixture = req?.body?.fixture || "";
+    const vm = vmParam || { LHREntries: [0] };
+    const user = userParam || null;
+    let fixture = fixtureParam || null;
+
 
     let sopNum = "-";
     const ml = await getMasterList();
@@ -1080,10 +1089,12 @@ exports.generatePickLists = async (req, res) => {
         sopNum = tempSOP.SOPNum;
         tempQuantity = tempLHREntry.Quantity;
 
-        tempSOP = {
-          Program: { Name: ProgramName.Name },
-          ODD: new Date(0), // DateTime.MinValue equivalent
-        };
+        // tempSOP = {
+        //   Program: { Name: ProgramName.Name },
+        //   ODD: new Date(0), // DateTime.MinValue equivalent
+        // };
+
+        tempSOP.Program = { Name: ProgramName.Name };
       } else {
         tempSOP = {
           Program: { Name: "" },
@@ -1173,7 +1184,7 @@ exports.generatePickLists = async (req, res) => {
     const day = String(now.getDate()).padStart(2, "0");
     const dateStr = `${month}-${day}`;
     const safeFixture = fixture.replace(/[\\/:*?"<>|]/g, "-"); // Avoid filename issues
-    const fileName = `-(${safeFixture}) ${dateStr}.xlsx`;
+    const fileName = sopNum + " (" + safeFixture +") " +  dateStr + ".xlsx";
 
     res.setHeader(
       "Content-Disposition",
@@ -1427,6 +1438,26 @@ exports.fixtureDetails = async (req, res) => {
       message: "Successfully fetched fixture details",
       data: openPickLists,
     });
+  } catch (err) {
+    console.log("error:", err);
+    return res.failureResponse({ message: err.message });
+  }
+};
+
+exports.downloadPickList = async (req, res) => {
+  try { 
+    const { fixture, lhrEntryId, user } = req.query;
+
+    if (lhrEntryId) {
+      // Call for existing pick list using LeadHandEntryId
+      await generatePickLists({ LHREntries: [parseInt(lhrEntryId)] }, user, null, res);
+    } else if (fixture) {
+      // Call for blank pick list using fixture number
+      await generatePickLists(null, user, fixture, res);
+    } else {
+      return res.status(400).json({ message: "Missing required parameters" });
+    }
+
   } catch (err) {
     console.log("error:", err);
     return res.failureResponse({ message: err.message });
