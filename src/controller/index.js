@@ -1456,6 +1456,14 @@ exports.SOPSerchService = async (req, res) => {
 
     sopNumberResult = sopNumberResult.recordset[0];
 
+    const LeadHandEntryResult = await pool
+      .request()
+      .input("SOPId", sql.Int, sopNumberResult.SOPId).query(`
+        SELECT *
+        FROM [SOP].[dbo].[SOPLeadHandEntries]
+        WHERE SOPId = @SOPId
+      `);
+
     const customerResult = await pool
       .request()
       .input("SOPCustomerId", sql.Int, sopNumberResult.SOPCustomerId).query(`
@@ -1578,6 +1586,7 @@ exports.SOPSerchService = async (req, res) => {
       location: locationResult.recordset,
       sopProductionManager: sopProductionManagerResult.recordset,
       productionEntry: productionEntryResult.recordset,
+      leadHandEntry: LeadHandEntryResult.recordset,
       leadHand: leadHandResult.recordset,
       qaEntry: qaEntryResult.recordset,
       shippingEntry: shippingEntryResult.recordset,
