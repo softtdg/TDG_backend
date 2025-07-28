@@ -946,28 +946,51 @@ async function addSOP(
     const row = worksheet.getRow(i + 8);
     const descParts = (comp.Description || "").split("<line>");
     const parent = descParts[0];
-    const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN; // adjust as needed
+    const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN;
 
-    const fullDesc = parent
-      ? `GOES INTO ${parent}\n${descParts[1] || ""}`
-      : descParts[1] || "";
+    // Create rich text for description with bold "GOES INTO" part
+    let richText = [];
+    if (parent) {
+      richText.push({
+        text: `GOES INTO ${parent}\n`,
+        font: { bold: true, size: 18, name: "Calibri" },
+      });
+    }
+    if (descParts[1]) {
+      richText.push({
+        text: descParts[1],
+        font: { bold: false, size: 18, name: "Calibri" },
+      });
+    }
 
-      row.values = [
-        comp.TDGPN,
-        fullDesc,
-        comp.Vendor,
-        comp.VendorPN,
-        comp.QuantityPerFixture,
-        isTopLevel
-          ? {
-              formula: `$B$4*E${i + 8}`,
-              result: comp.QuantityPerFixture * Quantity,
-            }
-          : comp.QuantityPerFixture, // just show the value for child/sub rows
-        "",
-        comp.Location,
-        comp.LeadHandComments,
-      ];
+    // Determine if this is a consumable item
+    const isConsumable =
+      comp.ConsumableOrVMI ||
+      (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
+      (comp.LeadHandComments &&
+        comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
+
+    // Calculate total quantity based on type
+    let totalQty = 0;
+    if (isConsumable) {
+      // For consumables, show the per-fixture quantity (no multiplication)
+      totalQty = comp.QuantityPerFixture || 0;
+    } else {
+      // For regular items, multiply by fixture quantity
+      totalQty = (comp.QuantityPerFixture || 0) * Quantity;
+    }
+
+    row.values = [
+      comp.TDGPN,
+      richText.length > 0 ? { richText } : descParts[1] || "",
+      comp.Vendor,
+      comp.VendorPN,
+      comp.QuantityPerFixture,
+      totalQty,
+      "",
+      comp.Location,
+      comp.LeadHandComments,
+    ];
 
     for (let c = 1; c <= 9; c++) {
       const cell = row.getCell(c);
@@ -987,20 +1010,20 @@ async function addSOP(
       };
     }
 
-    const qty = comp.QuantityNeeded || 0;
+    const qty = totalQty;
     const available = comp.QuantityAvailable || 0;
-    if (qty > available && !comp.ConsumableOrVMI) {
+    if (qty > available && !isConsumable) {
       row.getCell(6).fill = {
         type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "FFFFC0CB" },
+        pattern: "lightTrellis",
+        fgColor: { argb: "FFFF0000" },
       };
     }
 
     const loc = (comp.Location || "").toUpperCase();
     const isGray =
+      isConsumable ||
       loc.includes("INHOUSE") ||
-      loc.includes("CONSUMABLE") ||
       (loc.includes("V") && !loc.includes("HV")) ||
       qty === 0;
     if (isGray) {
@@ -1053,12 +1076,169 @@ async function addSOP(
   worksheet.views = [{ showGridLines: false }];
 }
 
+// async function addSOP(components, fixtureDescription, SOP, workbook, Project, Fixture, Quantity, RequiredDate) {
+//   const worksheet = workbook.addWorksheet(SOP, {
+//     pageSetup: {
+//       orientation: 'landscape',
+//       fitToPage: true,
+//       fitToWidth: 1,
+//       fitToHeight: 0,
+//     },
+//     properties: { defaultColWidth: 20 },
+//     views: [{ showGridLines: false }]
+//   });
+
+//   // Insert header rows
+//   worksheet.insertRow(1, []);
+//   worksheet.insertRow(2, []);
+//   worksheet.insertRow(3, []);
+//   worksheet.insertRow(4, []);
+//   worksheet.insertRow(5, []);
+//   worksheet.insertRow(6, []);
+
+//   worksheet.getCell('A1').value = 'SOP #';
+//   worksheet.getCell('A1').font = { size: 18, bold: true };
+//   worksheet.getCell('B1').value = { formula: 'MID(CELL("filename",A1),FIND("]",CELL("filename",A1))+1,255)' };
+//   worksheet.getCell('C1').value = { formula: '="PICK LIST #" & B1' };
+//   worksheet.getCell('C1').font = { size: 18, bold: true };
+//   worksheet.mergeCells('C1:F1');
+//   worksheet.getCell('G1').value = 'PICK LIST PRINTED ON';
+//   worksheet.getCell('I1').value = new Date();
+//   worksheet.mergeCells('G1:H1');
+
+//   worksheet.getCell('A2').value = 'PROJECT';
+//   worksheet.getCell('B2').value = Project;
+//   worksheet.getCell('G2').value = 'PICK LIST LOG NUMBER';
+//   worksheet.mergeCells('G2:H2');
+
+//   worksheet.getCell('A3').value = 'FIXTURE';
+//   worksheet.getCell('B3').value = Fixture;
+//   worksheet.getCell('C3').value = fixtureDescription;
+//   worksheet.getCell('C3').font = { size: 18 };
+//   worksheet.mergeCells('C3:F5');
+//   worksheet.getCell('G3').value = 'DATE PICKED';
+//   worksheet.mergeCells('G3:H3');
+
+//   worksheet.getCell('A4').value = 'QUANTITY';
+//   worksheet.getCell('B4').value = Quantity;
+//   worksheet.getCell('G4').value = 'LEAD HAND SIGN OFF';
+//   worksheet.mergeCells('G4:H5');
+
+//   worksheet.getCell('A5').value = 'REQUIRED ON';
+//   worksheet.getCell('B5').value = RequiredDate;
+//   worksheet.mergeCells('I4:I5');
+
+//   // Column headers
+//   const headerRow = worksheet.addRow([
+//     'TDG PART NO', 'DESCRIPTION', 'VENDOR', 'VENDOR P/N',
+//     'PER FIX QTY.', 'TOTAL QTY NEEDED', 'ACTUAL QTY PICKED', 'LOCATION/ PURCHASING COMMENTS', 'LEAD HAND COMMENTS'
+//   ]);
+
+//   headerRow.eachCell((cell) => {
+//     cell.font = { bold: true };
+//     cell.alignment = { horizontal: 'center' };
+//     cell.border = {
+//       top: { style: 'thin' },
+//       left: { style: 'thin' },
+//       bottom: { style: 'thin' },
+//       right: { style: 'thin' },
+//     };
+//   });
+//   worksheet.getCell('C1').alignment = { horizontal: 'center' };
+// worksheet.getCell('C3').alignment = { horizontal: 'center' };
+
+//   // Start writing component data from row 8
+//   components.forEach((comp, index) => {
+//     const rowIndex = index + 8;
+//     const row = worksheet.getRow(rowIndex);
+//     row.height = 25;
+
+//     // Description handling with rich text
+//     const descParts = (comp.Description || '').split('<line>');
+//     const richText = [];
+
+//     if (descParts[0]) {
+//       richText.push({ text: `GOES INTO ${descParts[0]}\n`, font: { bold: true } });
+//     }
+//     if (descParts[1]) {
+//       richText.push({ text: descParts[1], font: { bold: false } });
+//     }
+
+//     worksheet.getCell(`A${rowIndex}`).value = comp.TDGPN;
+//     worksheet.getCell(`B${rowIndex}`).value = { richText };
+//     worksheet.getCell(`B${rowIndex}`).alignment = { wrapText: true };
+
+//     worksheet.getCell(`C${rowIndex}`).value = comp.Vendor;
+//     worksheet.getCell(`D${rowIndex}`).value = comp.VendorPN;
+//     worksheet.getCell(`E${rowIndex}`).value = comp.QuantityPerFixture || 0;
+
+//     // Formula in column F: = $B$4 * E{rowIndex}
+//     worksheet.getCell(`F${rowIndex}`).value = {
+//       formula: `=$B$4*E${rowIndex}`,
+//       result: null
+//     };
+
+//     worksheet.getCell(`E${rowIndex}`).alignment = { horizontal: 'right' };
+// worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'right' };
+
+//     worksheet.getCell(`G${rowIndex}`).value = '';
+//     worksheet.getCell(`H${rowIndex}`).value = comp.Location;
+//     worksheet.getCell(`I${rowIndex}`).value = comp.LeadHandComments;
+
+//     // Styling
+//     worksheet.getCell(`A${rowIndex}`).font = { bold: true };
+//     worksheet.getCell(`A${rowIndex}`).alignment = { horizontal: 'center' };
+//     worksheet.getCell(`C${rowIndex}`).alignment = { horizontal: 'center' };
+//     worksheet.getCell(`D${rowIndex}`).alignment = { horizontal: 'center' };
+//     worksheet.getCell(`E${rowIndex}`).alignment = { horizontal: 'center', wrapText: true };
+//     worksheet.getCell(`F${rowIndex}`).alignment = { horizontal: 'center' };
+//     worksheet.getCell(`G${rowIndex}`).alignment = { horizontal: 'center' };
+
+//     // Red fill if shortage
+//     if ((comp.QuantityNeeded > comp.QuantityAvailable) && !comp.ConsumableOrVMI) {
+//       worksheet.getCell(`F${rowIndex}`).fill = {
+//         type: 'pattern',
+//         pattern: 'lightTrellis',
+//         fgColor: { argb: 'FFFF0000' }
+//       };
+//     }
+
+//     // Gray fill for specific locations or 0 quantity
+//     if (
+//       comp.Location?.includes('INHOUSE') ||
+//       comp.Location?.includes('CONSUMABLE') ||
+//       (comp.Location?.includes('V') && !comp.Location.includes('HV')) ||
+//       comp.QuantityNeeded === 0
+//     ) {
+//       for (let col = 1; col <= 9; col++) {
+//         worksheet.getCell(rowIndex, col).fill = {
+//           type: 'pattern',
+//           pattern: 'solid',
+//           fgColor: { argb: 'FFD3D3D3' }
+//         };
+//       }
+//     }
+//   });
+
+//   // Column widths
+//   worksheet.columns = [
+//     { width: 22.28 },
+//     { width: 69 },
+//     { width: 22.42 },
+//     { width: 27 },
+//     { width: 11.57 },
+//     { width: 13.28 },
+//     { width: 20.42 },
+//     { width: 21.57 },
+//     { width: 31.57 },
+//   ];
+// }
+
 const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
   try {
     const vm = vmParam || { LHREntries: [0] };
     const user = userParam || null;
     let fixture = fixtureParam || null;
-
 
     let sopNum = "-";
     const ml = await getMasterList();
@@ -1098,7 +1278,7 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
       } else {
         tempSOP = {
           Program: { Name: "" },
-          ODD: new Date(0), // DateTime.MinValue equivalent
+          ODD: "0001-01-01T00:00:00.000Z", // DateTime.MinValue equivalent
         };
       }
 
@@ -1184,7 +1364,7 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
     const day = String(now.getDate()).padStart(2, "0");
     const dateStr = `${month}-${day}`;
     const safeFixture = fixture.replace(/[\\/:*?"<>|]/g, "-"); // Avoid filename issues
-    const fileName = sopNum + " (" + safeFixture +") " +  dateStr + ".xlsx";
+    const fileName = sopNum + " (" + safeFixture + ") " + dateStr + ".xlsx";
 
     res.setHeader(
       "Content-Disposition",
@@ -1445,19 +1625,23 @@ exports.fixtureDetails = async (req, res) => {
 };
 
 exports.downloadPickList = async (req, res) => {
-  try { 
+  try {
     const { fixture, lhrEntryId, user } = req.query;
 
     if (lhrEntryId) {
       // Call for existing pick list using LeadHandEntryId
-      await generatePickLists({ LHREntries: [parseInt(lhrEntryId)] }, user, null, res);
+      await generatePickLists(
+        { LHREntries: [parseInt(lhrEntryId)] },
+        user,
+        null,
+        res
+      );
     } else if (fixture) {
       // Call for blank pick list using fixture number
       await generatePickLists(null, user, fixture, res);
     } else {
       return res.status(400).json({ message: "Missing required parameters" });
     }
-
   } catch (err) {
     console.log("error:", err);
     return res.failureResponse({ message: err.message });
