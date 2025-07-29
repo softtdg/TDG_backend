@@ -683,15 +683,27 @@ async function addSOP(
       (comp.LeadHandComments &&
         comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
 
-    // Calculate total quantity based on type
-    let totalQty = 0;
-    if (isConsumable) {
-      // For consumables, show the per-fixture quantity (no multiplication)
-      totalQty = comp.QuantityPerFixture || 0;
-    } else {
-      // For regular items, multiply by fixture quantity
-      totalQty = (comp.QuantityPerFixture || 0) * Quantity;
-    }
+        const hasLocation = comp.Location && comp.Location.trim() !== "";
+        const available = comp.QuantityAvailable || 0;
+        const qtyPerFixture = comp.QuantityPerFixture || 0;
+      
+        // Calculate base totalQty
+        let totalQty = isConsumable
+          ? qtyPerFixture
+          : qtyPerFixture * Quantity;
+      
+        const shouldBeRed = totalQty > available && !isConsumable;
+      
+        // Apply conditional logic for final totalQty display
+        if (shouldBeRed) {
+          totalQty = "";
+        } else if (!hasLocation && !shouldBeRed) {
+          totalQty = 0;
+        } else if (!isConsumable && (!qtyPerFixture || qtyPerFixture === 0)) {
+          totalQty = "";
+        } else {
+          totalQty = "";
+        }
 
     row.values = [
       comp.TDGPN,
@@ -725,8 +737,7 @@ async function addSOP(
     }
 
     const qty = totalQty;
-    const available = comp.QuantityAvailable || 0;
-    if (qty > available && !isConsumable) {
+    if (shouldBeRed) {
       row.getCell(6).fill = {
         type: "pattern",
         pattern: "lightTrellis",
