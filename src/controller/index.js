@@ -992,6 +992,7 @@ async function addSOP(
       comp.LeadHandComments,
     ];
 
+    // create table border for description.....
     for (let c = 1; c <= 9; c++) {
       const cell = row.getCell(c);
       // Apply normal font for B, C, D; bold for others
@@ -1037,7 +1038,7 @@ async function addSOP(
     }
   });
 
-  // Final gray row
+  // last row set gray color
   const finalRow = worksheet.getRow(components.length + 8);
   for (let c = 1; c <= 9; c++) {
     finalRow.getCell(c).fill = {
