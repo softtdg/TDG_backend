@@ -889,10 +889,10 @@ async function addSOP(
     for (let c = 1; c <= 9; c++) {
       const cell = worksheet.getRow(r).getCell(c);
       cell.border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" },
+        top: { style: "medium" },
+        bottom: { style: "medium" },
+        left: { style: "medium" },
+        right: { style: "medium" },
       };
     }
   }
@@ -1069,10 +1069,16 @@ async function addSOP(
   ["C1", "C2", "C3", "C4", "C5"].forEach(
     (cell) =>
       (worksheet.getCell(cell).alignment = {
-        horizontal: "center",
-        vertical: "top",
-      })
+      horizontal: "center",
+      vertical: "top",
+    })
   );
+
+  worksheet.getCell("C3").alignment = {
+    horizontal: "center",
+    vertical: "top",
+    wrapText: true,
+  };
 
   worksheet.views = [{ showGridLines: false }];
 }
