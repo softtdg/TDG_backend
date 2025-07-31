@@ -684,9 +684,17 @@ async function addSOP(
         comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
 
     let totalQty = 0;
+
+    const isWire =
+      comp.Description && comp.Description.toUpperCase().includes("WIRE");
+      
     if (isConsumable) {
       // For consumables, show the per-fixture quantity (no multiplication)
       totalQty = comp.QuantityPerFixture || 0;
+    } else if (comp.TDGPN.includes("LABEL")) {
+      totalQty = 0; 
+    } else if (isWire) {
+      totalQty = 0;
     } else {
       // For regular items, multiply by fixture quantity
       totalQty = (comp.QuantityPerFixture || 0) * Quantity;
