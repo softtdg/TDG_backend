@@ -1152,9 +1152,11 @@ exports.SOPSerchService = async (req, res) => {
             `);
         }
 
+        const fixtureName = fixFixtureName(fixture.FixtureNumber);
+
         // Get MongoDB data for this fixture
         const fixtureMongoData = await collection
-          .find({ Name: fixture.FixtureNumber })
+          .find({ Name: fixtureName })
           .limit(10)
           .toArray();
 
