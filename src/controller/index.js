@@ -1033,6 +1033,24 @@ exports.SOPSerchService = async (req, res) => {
         WHERE SOPId = @SOPId
       `);
 
+    const LeadHandEntryResults = LeadHandEntryResult.recordset;
+    let backorderEntryResult = [];
+
+    if (LeadHandEntryResults.length) {
+      backorderEntryResult =await Promise.all(
+        LeadHandEntryResults.map(async (e) => {
+          const backorderResults = await pool
+          .request()
+          .input("SOPLeadHandEntryId", sql.Int, e.SOPLeadHandEntryId).query(`
+            SELECT *
+            FROM [SOP].[dbo].[SOPBackorderEntries]
+            WHERE SOPLeadHandEntryId = @SOPLeadHandEntryId
+          `);
+          return { ...e, backorderEntry: backorderResults.recordset || [] };
+        })
+      );
+    }
+
     const customerResult = await pool
       .request()
       .input("SOPCustomerId", sql.Int, sopNumberResult.SOPCustomerId).query(`
@@ -1155,7 +1173,7 @@ exports.SOPSerchService = async (req, res) => {
       location: locationResult.recordset,
       sopProductionManager: sopProductionManagerResult.recordset,
       productionEntry: productionEntryResult.recordset,
-      leadHandEntry: LeadHandEntryResult.recordset,
+      leadHandEntry: backorderEntryResult, // leadhand entry and backorder entry both in one array
       leadHand: leadHandResult.recordset,
       qaEntry: qaEntryResult.recordset,
       shippingEntry: shippingEntryResult.recordset,
