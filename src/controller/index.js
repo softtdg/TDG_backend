@@ -943,6 +943,8 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
+
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
     res.send(buffer);
     // Do not send a JSON response after sending the file buffer
   } catch (err) {
