@@ -1,5 +1,6 @@
 const { MongoClient } = require('mongodb');
-const uri = 'mongodb://localhost:27017';
+const config = require('../config/config');
+const uri = config.mongoUri;
 const client = new MongoClient(uri);
 
 let db;

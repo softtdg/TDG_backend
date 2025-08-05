@@ -4,5 +4,8 @@ const config = {
   HOST: process.env.HOST,
   baseUri: process.env.baseURL,
   prefix:"/api",
+  mongoUri: process.env.mongoUri,
+  user: process.env.sqlUser,
+  password: process.env.sqlPassword,
 };
 module.exports = config;
