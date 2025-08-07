@@ -866,9 +866,9 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
           const parent = tempParent ? tempParent.TDGPN : "";
 
           let quantityPerFixture = Math.round(comp.Quantity);
-          const refComp = refFixture.Components.find(
+          const refComp = refFixture && refFixture.Components ? refFixture.Components.find(
             (x) => x.Level === comp.Level
-          );
+          ) : null;
           if (refComp) {
             quantityPerFixture = Math.round(refComp.Quantity);
           }
