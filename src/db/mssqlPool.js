@@ -7,8 +7,8 @@ sql.on('error', err => {
 
 async function getDbPool(databaseName) {
   const sqlConfig = {
-    server: '127.0.0.1',
-    port: 11433,
+    server: config.sqlServer,
+    port: config.sqlPort,
     database: databaseName,
     user: config.user,
     password: config.password,

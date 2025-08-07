@@ -7,5 +7,7 @@ const config = {
   mongoUri: process.env.mongoUri,
   user: process.env.sqlUser,
   password: process.env.sqlPassword,
+  sqlServer: process.env.sqlServer,
+  sqlPort: process.env.sqlPort,
 };
 module.exports = config;
