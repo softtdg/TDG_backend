@@ -8,6 +8,6 @@ const config = {
   user: process.env.sqlUser,
   password: process.env.sqlPassword,
   sqlServer: process.env.sqlServer,
-  sqlPort: process.env.sqlPort,
+  sqlPort: parseInt(process.env.sqlPort) || 1433,
 };
 module.exports = config;
