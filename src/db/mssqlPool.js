@@ -4,6 +4,7 @@ const config = require('../config/config');
 async function getDbPool(databaseName) {
   const sqlConfig = {
     server: 'localhost',
+    port: 1433,
     database: databaseName,
     user: config.user,
     password: config.password,
