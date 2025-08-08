@@ -854,7 +854,6 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
 
       const db = await connectDB("BOMs");
       const tempFixture = await getExplodedBOM(fixture, db);
-      console.log('tempFixture: ', tempFixture);
       const refFixture = await getStoredFixture(fixture, db);
 
       // Process components in parallel
