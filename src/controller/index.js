@@ -375,16 +375,12 @@ const GetInventoryLocations = async (TDGPN) => {
   }
 
   try {
-    // const response = await axios.get(
-    //   `${config.inventoryDomain}/api/inventory/getlocations`,
-    //   {
-    //     params: { tdgpn: TDGPN },
-    //   }
-    // );
-    const response = await axios.get('http://localhost:62625/api/inventory/getlocations', {
-      params: { tdgpn: TDGPN },
-      timeout: 10000, // 10 seconds
-    });
+    const response = await axios.get(
+      `${config.inventoryDomain}/api/inventory/getlocations`,
+      {
+        params: { tdgpn: TDGPN },
+      }
+    );
     return response.data;
   } catch (err) {
     console.error("Error fetching inventory locations:", err.message);
@@ -402,16 +398,12 @@ const GetINTLInventoryLocations = async (TDGPN) => {
   }
 
   try {
-    // const response = await axios.get(
-    //   `${config.inventoryDomain}/api/inventory/getintllocations`,
-    //   {
-    //     params: { tdgpn: TDGPN },
-    //   }
-    // );
-    const response = await axios.get('http://localhost:62625/api/inventory/getintllocations', {
-      params: { tdgpn: TDGPN },
-      timeout: 10000, // 10 seconds
-    });
+    const response = await axios.get(
+      `${config.inventoryDomain}/api/inventory/getintllocations`,
+      {
+        params: { tdgpn: TDGPN },
+      }
+    );
     return response.data;
   } catch (err) {
     console.error("Error fetching INTL inventory locations:", err.message);
