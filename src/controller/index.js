@@ -7,6 +7,7 @@ const axios = require("axios");
 const os = require("os");
 const fs = require("fs");
 const fsp = require("fs/promises");
+const config = require("../config/config");
 
 exports.testing = async (req, res) => {
   try {
@@ -375,7 +376,7 @@ const GetInventoryLocations = async (TDGPN) => {
 
   try {
     const response = await axios.get(
-      `http://192.168.2.175:62625/api/inventory/getlocations`,
+      `${config.inventoryDomain}/api/inventory/getlocations`,
       {
         params: { tdgpn: TDGPN },
       }
@@ -398,7 +399,7 @@ const GetINTLInventoryLocations = async (TDGPN) => {
 
   try {
     const response = await axios.get(
-      `http://192.168.2.175:62625/api/inventory/getintllocations`,
+      `${config.inventoryDomain}/api/inventory/getintllocations`,
       {
         params: { tdgpn: TDGPN },
       }

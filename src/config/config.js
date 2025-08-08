@@ -9,5 +9,6 @@ const config = {
   password: process.env.sqlPassword,
   sqlServer: process.env.sqlServer,
   sqlPort: parseInt(process.env.sqlPort) || 1433,
+  inventoryDomain: process.env.inventoryDomain,
 };
 module.exports = config;
