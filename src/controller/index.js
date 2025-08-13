@@ -1238,8 +1238,9 @@ exports.downloadPickList = async (req, res) => {
         res
       );
     } else if (fixture) {
+      const fixedFixture = fixFixtureName(fixture);
       // Call for blank pick list using fixture number
-      await generatePickLists(null, user, fixture, res);
+      await generatePickLists(null, user, fixedFixture, res);
     } else {
       return res.status(400).json({ message: "Missing required parameters" });
     }
