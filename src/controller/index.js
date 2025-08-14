@@ -71,6 +71,48 @@ const getMasterList = async () => {
   }
 };
 
+const getAllDieList = async () => {
+  try {
+    const pool = await getDbPool("Design");
+
+    const result = await pool.request().query(`
+      SELECT 
+        ML.MasterListEntryId,
+        ML.TDGPN,
+        ML.Description,
+        ML.Vendor,
+        ML.VendorPN,
+        ML.Material,
+        ML.Finish,
+        ML.Size,
+        ML.Path,
+        ML.Config,
+        ML.VariableSize,
+        ML.Comments,
+        ML.CreatedBy,
+        ML.CreatedOn,
+        ML.Customer,
+        ML.Project,
+        ML.Requester,
+
+        -- Foreign Key Relationships
+        G.Name AS GroupingName,
+        UOM.UOM AS UnitOfMeasure
+
+      FROM [Design].[dbo].[MasterList] ML
+      LEFT JOIN [Design].[dbo].[Groupings] G 
+        ON G.GroupEntryId = ML.GroupingGroupEntryId
+      LEFT JOIN [Design].[dbo].[UOMs] UOM 
+        ON UOM.UOMEntryId = ML.UnitOfMeasureUOMEntryId
+      WHERE G.Name = 'Die'
+    `);
+
+    return result.recordset;
+  } catch (error) {
+    console.error("❌ Error fetching MasterList:", error);
+  }
+};
+
 const getLeadHandEntry = async (SOPLeadHandEntryId) => {
   try {
     const pool = await getDbPool("SOP");
@@ -811,7 +853,8 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
     let fixture = fixtureParam || null;
 
     let sopNum = "-";
-    const ml = await getMasterList();
+    // const ml = await getMasterList();
+    const isDieLists = await getAllDieList();
 
     const workbook = new ExcelJS.Workbook();
 
@@ -861,35 +904,29 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
         tempFixture.Components.map(async (comp) => {
           const split = comp.Level.split(".");
           const parentLevel = split.slice(0, -1).join(".");
-          const tempParent = tempFixture.Components.find(
-            (x) => x.Level === parentLevel
-          );
+          const tempParent = tempFixture.Components.find((x) => x.Level === parentLevel);
           const parent = tempParent ? tempParent.TDGPN : "";
-
-          let quantityPerFixture = Math.round(comp.Quantity);
-          const refComp = refFixture && refFixture.Components ? refFixture.Components.find(
-            (x) => x.Level === comp.Level
-          ) : null;
-          if (refComp) {
-            quantityPerFixture = Math.round(refComp.Quantity);
-          }
 
           const tempComp = {
             Description: `${parent}<line>${comp.Description}`,
             TDGPN: comp.TDGPN,
-            QuantityPerFixture: quantityPerFixture,
-            QuantityNeeded: quantityPerFixture * tempQuantity,
-            Vendor: comp.Vendor,
-            VendorPN: comp.VendorPN,
           };
 
-          const isDieGroup = ml.find(
+          tempComp.QuantityPerFixture = Math.ceil(comp.Quantity); // MidpointRounding.ToPositiveInfinity equivalent
+          tempComp.QuantityNeeded = tempComp.QuantityPerFixture * tempQuantity;
+          tempComp.QuantityPerFixture = Math.ceil(refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity);
+      
+          const isDieGroup = isDieLists.find(
             (x) => x.TDGPN === comp.TDGPN && x.GroupingName === "Die"
           );
+
           if (isDieGroup) {
-            tempComp.QuantityNeeded = 0;
             tempComp.QuantityPerFixture = 0;
+            tempComp.QuantityNeeded = 0;
           }
+
+          tempComp.Vendor = comp.Vendor;
+          tempComp.VendorPN = comp.VendorPN;  
 
           const inventory = await GetInventoryTuple(comp.TDGPN, isIntlUser);
           tempComp.Location = inventory.location;
