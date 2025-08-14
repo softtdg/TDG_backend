@@ -697,8 +697,37 @@ async function addSOP(
   }
   worksheet.getColumn(9).width = 20;
 
+  let mergedComponents = [];
+
+  components.forEach(comp => {
+    // Extract GOES INTO (part before <line>)
+    let goesInto = comp.Description.split("<line>")[0]?.trim() || "";
+  
+    let existing = mergedComponents.find(c => c.TDGPN === comp.TDGPN);
+  
+    if (existing) {
+      // Push parent without uniqueness filtering
+      existing.parent.push(goesInto);
+  
+      // Sum quantities
+      existing.QuantityPerFixture += comp.QuantityPerFixture || 0;
+      existing.QuantityNeeded += comp.QuantityNeeded || 0;
+    } else {
+      // First occurrence
+      mergedComponents.push({
+        ...comp,
+        parent: [goesInto] // store as array
+      });
+    }
+  });
+  
+  // Convert parent array into comma-separated string (keeping duplicates)
+  mergedComponents = mergedComponents.map(c => ({
+    ...c,
+    parent: c.parent.join(", ")
+  }));
   // Data rows
-  components.forEach((comp, i) => {
+  mergedComponents.forEach((comp, i) => {
     const row = worksheet.getRow(i + 8);
     const descParts = (comp.Description || "").split("<line>");
     const parent = descParts[0];
@@ -708,7 +737,7 @@ async function addSOP(
     let richText = [];
     if (parent) {
       richText.push({
-        text: `GOES INTO ${parent}\n`,
+        text: `GOES INTO ${comp.parent}\n`,
         font: { bold: true, size: 18, name: "Calibri" },
       });
     }
@@ -788,7 +817,7 @@ async function addSOP(
     const isGray =
       isConsumable ||
       loc.includes("INHOUSE") ||
-      (loc.includes("V") && !loc.includes("HV")) ||
+      (loc.includes("V") && !loc.includes("HV")) || parent
       qty === 0;
     if (isGray) {
       for (let c = 1; c <= 9; c++) {
@@ -845,7 +874,6 @@ async function addSOP(
 
   worksheet.views = [{ showGridLines: false }];
 }
-
 const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
   try {
     const vm = vmParam || { LHREntries: [0] };
