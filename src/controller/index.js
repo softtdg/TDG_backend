@@ -546,6 +546,10 @@ const getUserByUsername = async (username) => {
   }
 };
 
+const isValidNumberLocationFormat = (location) => {
+  return /^\d+-\d+-\d+$/.test(location);
+};
+
 async function addSOP(
   components,
   fixtureDescription,
@@ -787,9 +791,10 @@ async function addSOP(
     const loc = (comp.Location || "").toUpperCase();
     const isGray =
       isConsumable ||
-      loc.includes("INHOUSE") ||
+      loc.includes("INHOUSE") || loc.includes("VMI") || loc.includes("LABEL") ||
       (loc.includes("V") && !loc.includes("HV")) ||
-      qty === 0;
+      qty === 0 ||
+      !isValidNumberLocationFormat(comp.Location || "");
     if (isGray) {
       for (let c = 1; c <= 9; c++) {
         row.getCell(c).fill = {
@@ -990,6 +995,171 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
   }
 };
 
+const getPickListData = async (lhrEntryId, user, fixtureParam) => {
+  try {
+    const listData = [];
+    let excelFixtureDetail = {};
+    const vm = lhrEntryId || { LHREntries: [0] };
+    // const user = user || null;
+    let fixture = fixtureParam || null;
+
+    let sopNum = "-";
+    // const ml = await getMasterList();
+    const isDieLists = await getAllDieList();
+
+    const workbook = new ExcelJS.Workbook();
+
+    // Fetch user role info only once
+    const intlUsers = await getUsersInRole("INTL");
+    const currentUser = await getUserByUsername(user || null);
+    const isIntlUser =
+      currentUser &&
+      intlUsers.some((intlUser) => intlUser.Id === currentUser.Id);
+
+    for (const LHREntryId of vm.LHREntries) {
+      let tempSOP = null;
+      let tempQuantity = 1;
+
+      if (LHREntryId !== 0) {
+        const tempLHREntry = await getLeadHandEntry(LHREntryId);
+        fixture = fixFixtureName(tempLHREntry.FixtureNumber);
+
+        tempSOP = tempLHREntry.SOPId;
+        tempSOP = await getSOPIdtoSopData(tempSOP);
+
+        const ProgramName = await getProgramNameByProgramId(
+          tempSOP.SOPProgramId
+        );
+        sopNum = tempSOP.SOPNum;
+        tempQuantity = tempLHREntry.Quantity;
+
+        tempSOP.Program = { Name: ProgramName.Name };
+      } else {
+        tempSOP = {
+          Program: { Name: "" },
+          ODD: "0001-01-01T00:00:00.000Z", // DateTime.MinValue equivalent
+        };
+      }
+
+      const db = await connectDB("BOMs");
+      const tempFixture = await getExplodedBOM(fixture, db);
+      console.log(': ', tempFixture.Description);
+      const refFixture = await getStoredFixture(fixture, db);
+
+      // Process components in parallel
+      const tempComponents = await Promise.all(
+        tempFixture.Components.map(async (comp) => {
+          const split = comp.Level.split(".");
+          const parentLevel = split.slice(0, -1).join(".");
+          const tempParent = tempFixture.Components.find((x) => x.Level === parentLevel);
+          const parent = tempParent ? tempParent.TDGPN : "";
+
+          const tempComp = {
+            Description: `${parent}<line>${comp.Description}`,
+            TDGPN: comp.TDGPN,
+          };
+
+          tempComp.QuantityPerFixture = Math.ceil(comp.Quantity); // MidpointRounding.ToPositiveInfinity equivalent
+          tempComp.QuantityNeeded = tempComp.QuantityPerFixture * tempQuantity;
+          tempComp.QuantityPerFixture = Math.ceil(refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity);
+      
+          const isDieGroup = isDieLists.find(
+            (x) => x.TDGPN === comp.TDGPN && x.GroupingName === "Die"
+          );
+
+          if (isDieGroup) {
+            tempComp.QuantityPerFixture = 0;
+            tempComp.QuantityNeeded = 0;
+          }
+
+          tempComp.Vendor = comp.Vendor;
+          tempComp.VendorPN = comp.VendorPN;  
+          tempComp.UnitOfMeasure = comp.UnitOfMeasure;
+          
+
+          const inventory = await GetInventoryTuple(comp.TDGPN, isIntlUser);
+          tempComp.Location = inventory.location;
+          tempComp.QuantityAvailable = inventory.quantity;
+          tempComp.ConsumableOrVMI = inventory.type;
+
+          return tempComp;
+        })
+      );
+
+      tempComponents.forEach((comp, i) => {
+        const descParts = (comp.Description || "").split("<line>");
+        const parent = descParts[0];
+        const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN;
+    
+        // Create rich text for description with bold "GOES INTO" part
+        let richText ="";
+        if (parent) {
+          richText += `GOES INTO ${parent}\n`;
+        }
+        if (descParts[1]) {
+          richText += descParts[1];
+        }
+    
+        // Determine if this is a consumable item
+        const isConsumable =
+          comp.ConsumableOrVMI ||
+          (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
+          (comp.LeadHandComments &&
+            comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
+    
+        let totalQty = 0;
+    
+        const isWire =
+          comp.Description && comp.Description.toUpperCase().includes("WIRE");
+          
+        if (isConsumable) {
+          // For consumables, show the per-fixture quantity (no multiplication)
+          totalQty = comp.QuantityPerFixture || 0;
+        } else if (comp.TDGPN.includes("LABEL")) {
+          totalQty = 0; 
+        } else if (isWire) {
+          totalQty = 0;
+        } else {
+          // For regular items, multiply by fixture quantity
+          totalQty = (comp.QuantityPerFixture || 0) * tempQuantity;
+        }
+    
+        listData.push({
+          TDGPN: comp.TDGPN,
+          Description: richText || "",
+          Vendor: comp.Vendor,
+          VendorPN: comp.VendorPN,
+          QuantityPerFixture: comp.QuantityPerFixture,
+          TotalQtyNeeded: totalQty,
+          ActualQtyPicked: "",
+          Location: comp.Location,
+          LeadHandComments: "",
+          UnitOfMeasure: comp.UnitOfMeasure,
+          QuantityToBePicked: "",
+          QuantityAvailable: comp.QuantityAvailable,
+          ConsumableOrVMI: comp.ConsumableOrVMI,
+        });
+        
+         
+      });
+
+      excelFixtureDetail = {
+        description: tempFixture.Description,
+        sopNum,
+        programName: tempSOP.Program.Name,
+        fixture,
+        tempQuantity,
+        odd: tempSOP.ODD
+      }
+    }
+    
+    return {excelFixtureDetail,listData};
+  } catch (err) {
+    console.log('error', err);
+    return listData = [];
+  }
+}
+
 const getOpenPickLists = async (fixtureNumber) => {
   try {
     let fixtureLists = [];
@@ -1040,6 +1210,343 @@ const getOpenPickLists = async (fixtureNumber) => {
     return res.failureResponse({ message: err.message });
   }
 };
+
+const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
+  try {
+    const workbookCreate = new ExcelJS.Workbook();
+
+    const worksheet = workbookCreate.addWorksheet(excelFixtureDetail.sopNum, {
+      pageSetup: {
+        orientation: "landscape",
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+      },
+    });
+  
+    // Format the current date to "Month Day, Year"
+    const formattedPrintedDate = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  
+    // Format the required date to "D-MMM-YY" (e.g., 1-Jan-01)
+    const formattedRequiredDate = excelFixtureDetail.odd
+      ? new Date(excelFixtureDetail.odd)
+          .toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "2-digit",
+          })
+          .replace(/ /g, "-")
+      : "";
+  
+    // Insert header rows (Row 1-5)
+    worksheet.insertRows(1, [
+      [
+        "SOP #",
+        excelFixtureDetail.sopNum,
+        `PICK LIST #${excelFixtureDetail.sopNum}`,
+        "",
+        "",
+        "",
+        "PICK LIST PRINTED ON",
+        "",
+        formattedPrintedDate,
+        "",
+        "",
+      ],
+      ["PROJECT", excelFixtureDetail.programName || "", "", "", "", "", "PICK LIST LOG NUMBER", "", "", "", ""],
+      ["FIXTURE", excelFixtureDetail.fixture, excelFixtureDetail.description, "", "", "", "DATE PICKED", "", "", "", ""],
+      ["QUANTITY", excelFixtureDetail.tempQuantity, "", "", "", "", "LEAD HAND SIGN OFF", "", "", "", ""],
+      ["REQUIRED ON", formattedRequiredDate, "", "", "", "", "", "", "", "", ""],
+    ]);
+  
+    // Merges
+    ["C1:F1", "G1:H1", "G2:H2", "C3:F5", "G3:H3", "G4:H5","I3:J3","I2:J2", "I1:J1", "I4:J5"].forEach(
+      (range) => worksheet.mergeCells(range)
+    );
+  
+    // Column widths
+    [
+      22.28, // TDG PART NO
+      69,    // DESCRIPTION
+      22.42, // VENDOR
+      27,    // VENDOR P/N
+      11.57, // PER FIX QTY.
+      13.28, // TOTAL QTY NEEDED
+      19, // ACTUAL QTY PICKED
+      21.57, // UNIT OF MEASURE
+      11.57, // QUANTITY TO BE PICKED
+      25,    // LOCATION / PURCHASING COMMENTS (increased)
+      19     // LEAD HAND COMMENTS (also increased)
+    ].forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
+  
+    // Row 7 headers
+    const headers = [
+      "TDG PART NO",
+      "DESCRIPTION",
+      "VENDOR",
+      "VENDOR P/N",
+      "PER FIX QTY.",
+      "TOTAL QTY NEEDED",
+      "ACTUAL QTY PICKED",
+      "UNIT OF MEASURE",
+      "QUANTITY TO BE PICKED",
+      "LOCATION/ PURCHASING COMMENTS",
+      "LEAD HAND COMMENTS",
+    ];
+    worksheet.getRow(7).values = headers;
+    worksheet.getRow(7).height = undefined;
+    worksheet.getRow(7).eachCell((cell) => {
+      cell.font = { bold: true, size: 18, name: "Calibri" };
+      cell.alignment = {
+        horizontal: "center",
+        vertical: "middle",
+        wrapText: true,
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "D9E1F2" },
+      };
+    });
+  
+    // Apply borders and fonts to header rows
+    for (let r = 1; r <= 5; r++) {
+      for (let c = 1; c <= 9; c++) {
+        const cell = worksheet.getRow(r).getCell(c);
+        cell.border = {
+          top: { style: "medium" },
+          bottom: { style: "medium" },
+          left: { style: "medium" },
+          right: { style: "medium" },
+        };
+      }
+    }
+  
+    // Apply bold borders to second table (starting from Row 7)
+    for (let row = 7; row <= worksheet.rowCount; row++) {
+      for (let col = 1; col <= 11; col++) {
+        const cell = worksheet.getRow(row).getCell(col);
+        cell.border = {
+          top: { style: "thin" },
+          bottom: { style: "thin" },
+          left: { style: "thin" },
+          right: { style: "thin" },
+        };
+      }
+    }
+  
+    // Font + fill for header info cells
+    const headerFontCells = ["A", "B", "G"].flatMap((col) =>
+      [1, 2, 3, 4].map((row) => `${col}${row}`)
+    );
+    headerFontCells
+      .concat(["A5", "B5", "I1", "I2", "I3", "I4", "I5"])
+      .forEach((cell) => {
+        const c = worksheet.getCell(cell);
+        c.font = { bold: true, size: 18, name: "Calibri" };
+        c.alignment = { horizontal: "center", vertical: "middle" };
+        if (
+          cell.startsWith("A") ||
+          cell.startsWith("B") ||
+          cell.startsWith("G")
+        ) {
+          c.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "D9E1F2" },
+          };
+        }
+      });
+  
+    for (let r = 1; r <= 5; r++) {
+      worksheet.getCell(`I${r}`).alignment = {
+        horizontal: "center",
+        vertical: "middle",
+      };
+    }
+    // worksheet.getColumn(9).width = 20;
+  
+    // Data rows
+    sheetlistData.forEach((comp, i) => {
+      const row = worksheet.getRow(i + 8);
+      const descParts = (comp.Description || "").includes("GOES INTO") ? true :false;
+      const parent = descParts;
+      // const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN;
+  
+      // Create rich text for description with bold "GOES INTO" part
+      let richText = [];
+      if (parent) {
+        richText.push({
+          text: comp.Description,
+          font: { bold: true, size: 18, name: "Calibri" },
+        });
+      }
+     else {
+        richText.push({
+          text: comp.Description,
+          font: { bold: false, size: 18, name: "Calibri" },
+        });
+      }
+  
+      // Determine if this is a consumable item
+      const isConsumable =
+        comp.ConsumableOrVMI ||
+        (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
+        (comp.LeadHandComments &&
+          comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
+  
+      let totalQty = 0;
+  
+      const isWire =
+        comp.Description && comp.Description.toUpperCase().includes("WIRE");
+        
+      if (isConsumable) {
+        // For consumables, show the per-fixture quantity (no multiplication)
+        totalQty = comp.QuantityPerFixture || 0;
+      } else if (comp.TDGPN.includes("LABEL")) {
+        totalQty = 0; 
+      } else if (isWire) {
+        totalQty = 0;
+      } else {
+        // For regular items, multiply by fixture quantity
+        totalQty = (comp.QuantityPerFixture || 0) * excelFixtureDetail.tempQuantity;
+      }
+  
+      row.values = [
+        comp.TDGPN,
+        richText.length > 0 ? { richText } :comp.Description || "",
+        comp.Vendor,
+        comp.VendorPN,
+        comp.QuantityPerFixture,
+        totalQty,
+        "",
+        comp.UnitOfMeasure,
+        comp.QuantityToBePicked,
+        comp.Location,
+        comp.LeadHandComments,
+      ];
+
+      // create table border for description.....
+      for (let c = 1; c <= 11; c++) {
+        const cell = row.getCell(c);
+        // Apply normal font for B, C, D; bold for others
+        const isNormalFont = c === 2 || c === 3 || c === 4;
+        cell.font = { size: 18, name: "Calibri", bold: !isNormalFont };
+      
+        cell.alignment = {
+          wrapText: true,
+          vertical: "middle",
+          horizontal: (c === 2 ? "left" : "center"),  // only Description left, everything else centered
+        };
+        cell.border = {
+          top: { style: "thin" },
+          bottom: { style: "thin" },
+          left: { style: "thin" },
+          right: { style: "thin" },
+        };
+      }
+  
+      const qty = totalQty;
+      const available = comp.QuantityAvailable || 0;
+      if (qty > available && !isConsumable) {
+        row.getCell(6).fill = {
+          type: "pattern",
+          pattern: "lightTrellis",
+          fgColor: { argb: "FFFF0000" },
+        };
+      }
+  
+      const loc = (comp.Location || "").toUpperCase();
+      const isGray =
+        isConsumable ||
+        loc.includes("INHOUSE") ||
+        (loc.includes("V") && !loc.includes("HV")) ||
+        qty === 0;
+      if (isGray) {
+        for (let c = 1; c <= 11; c++) {
+          row.getCell(c).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFD3D3D3" },
+          };
+        }
+      }
+    });
+  
+    // last row set gray color
+    const finalRow = worksheet.getRow(sheetlistData.length + 8);
+    for (let c = 1; c <= 11; c++) {
+      finalRow.getCell(c).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFA9A9A9" },
+      };
+    }
+  
+    // Heading font + alignment
+    worksheet.getCell("C1").font = { bold: true, size: 18 };
+    worksheet.getCell("C1").alignment = { horizontal: "center", vertical: "top" };
+    worksheet.getCell("C3").font = { size: 18 };
+    ["A", "B"].forEach((col) =>
+      [1, 2, 3, 4, 5].forEach(
+        (row) =>
+          (worksheet.getCell(`${col}${row}`).alignment = {
+            horizontal: col === "A" ? "left" : "right",
+          })
+      )
+    );
+    ["G", "H"].forEach((col) =>
+      [1, 2, 3, 4, 5].forEach(
+        (row) =>
+          (worksheet.getCell(`${col}${row}`).alignment = { horizontal: "center" })
+      )
+    );
+    ["C1", "C2", "C3", "C4", "C5"].forEach(
+      (cell) =>
+        (worksheet.getCell(cell).alignment = {
+          horizontal: "center",
+          vertical: "top",
+        })
+    );
+  
+    worksheet.getCell("C3").alignment = {
+      horizontal: "center",
+      vertical: "top",
+      wrapText: true,
+    };
+  
+    worksheet.views = [{ showGridLines: false }];
+
+    const buffer = await workbookCreate.xlsx.writeBuffer();
+
+    // Format: "-(fixture) Jul-24.xlsx"
+    const now = new Date();
+    const month = now.toLocaleString("en-US", { month: "short" });
+    const day = String(now.getDate()).padStart(2, "0");
+    const dateStr = `${month}-${day}`;
+    const safeFixture = excelFixtureDetail.fixture.replace(/[\\/:*?"<>|]/g, "-"); // Avoid filename issues
+    const fileName = excelFixtureDetail.sopNum + " (" + safeFixture + ") " + dateStr + ".xlsx";
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=\"${fileName}\"`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
+    res.send(buffer);
+  } catch (error) {
+    console.log('error', error);
+    res.failureResponse({ message: error.message });
+  }
+}
 
 exports.SOPSerchService = async (req, res) => {
   try {
@@ -1281,6 +1788,46 @@ exports.downloadPickList = async (req, res) => {
     } else {
       return res.status(400).json({ message: "Missing required parameters" });
     }
+  } catch (err) {
+    console.log("error:", err);
+    return res.failureResponse({ message: err.message });
+  }
+};
+
+exports.getSheetsBomData = async (req, res) => {
+  try {
+    const { lhrEntryId, user } = req.query;
+
+    const sheetBOMsData= await getPickListData(
+      { LHREntries: [parseInt(lhrEntryId)] },
+      user,
+    );
+
+    return res.ok({
+      message: "Successfully fetched sheet BOMs data",
+      data: sheetBOMsData || [],
+    });
+  } catch (err) {
+    console.log("error:", err);
+    return res.failureResponse({ message: err.message });
+  }
+};
+
+exports.downloadupdatedDataSheets = async (req, res) => {
+  try {
+    const {  sheetData ,excelFixtureDetail } = req.body;
+
+
+    if(!sheetData || sheetData.length === 0){
+      return res.badRequest({ message: "Sheet Data is required" });
+    }
+
+    if(!excelFixtureDetail || Object.keys(excelFixtureDetail).length === 0){
+      return res.badRequest({ message: "Excel Fixture Detail is required" });
+    }
+
+   await updatedSheetDownload(excelFixtureDetail,sheetData,res);
+
   } catch (err) {
     console.log("error:", err);
     return res.failureResponse({ message: err.message });
