@@ -581,7 +581,20 @@ async function addSOP(
   Quantity,
   RequiredDate
 ) {
-  const worksheet = workbook.addWorksheet(SOP, {
+  // Validate and sanitize worksheet name
+  let worksheetName = SOP;
+  if (!worksheetName || worksheetName.trim() === "") {
+    worksheetName = "Sheet1"; // Default fallback name
+  } else {
+    // Sanitize the name to remove invalid characters
+    worksheetName = worksheetName.replace(/[*?:\\/[\]]/g, "_");
+    worksheetName = worksheetName.trim();
+    if (worksheetName.length > 31) {
+      worksheetName = worksheetName.substring(0, 31);
+    }
+  }
+
+  const worksheet = workbook.addWorksheet(worksheetName, {
     pageSetup: {
       orientation: "landscape",
       fitToPage: true,
@@ -1530,7 +1543,7 @@ const getOpenPickLists = async (fixtureNumber) => {
     return result.recordset;
   } catch (err) {
     console.log("error:", err);
-    return res.failureResponse({ message: err.message });
+    return [];
   }
 };
 
@@ -1538,7 +1551,20 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
   try {
     const workbookCreate = new ExcelJS.Workbook();
 
-    const worksheet = workbookCreate.addWorksheet(excelFixtureDetail.sopNum, {
+    // Validate and sanitize worksheet name
+    let worksheetName = excelFixtureDetail.sopNum;
+    if (!worksheetName || worksheetName.trim() === "") {
+      worksheetName = "Sheet1"; // Default fallback name
+    } else {
+      // Sanitize the name to remove invalid characters
+      worksheetName = worksheetName.replace(/[*?:\\/[\]]/g, "_");
+      worksheetName = worksheetName.trim();
+      if (worksheetName.length > 31) {
+        worksheetName = worksheetName.substring(0, 31);
+      }
+    }
+
+    const worksheet = workbookCreate.addWorksheet(worksheetName, {
       pageSetup: {
         orientation: "landscape",
         fitToPage: true,

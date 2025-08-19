@@ -15,6 +15,13 @@ async function getDbPool(databaseName) {
     options: {
       encrypt: false,
       trustServerCertificate: true,
+      requestTimeout: 60000, // 60 seconds timeout
+      connectionTimeout: 30000, // 30 seconds connection timeout
+      pool: {
+        max: 10, // Maximum number of connections in pool
+        min: 0, // Minimum number of connections in pool
+        idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+      },
     },
   };
 
