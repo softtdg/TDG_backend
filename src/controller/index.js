@@ -550,6 +550,27 @@ const isValidNumberLocationFormat = (location) => {
   return /^\d+-\d+-\d+$/.test(location);
 };
 
+function getCellText(cell) {
+  if (!cell || cell.value == null) return "";
+
+  if (typeof cell.value === "string" || typeof cell.value === "number") {
+    return cell.value.toString();
+  }
+
+  // RichText
+  if (cell.value.richText) {
+    return cell.value.richText.map((rt) => rt.text).join("");
+  }
+
+  // Hyperlink or formula
+  if (cell.value.text) return cell.value.text;
+  if (cell.value.result) return cell.value.result.toString();
+
+  console.log(": cell.value", cell.value);
+
+  return cell.value.toString();
+}
+
 async function addSOP(
   components,
   fixtureDescription,
@@ -701,7 +722,189 @@ async function addSOP(
   }
   worksheet.getColumn(9).width = 20;
 
-  // Data rows
+  //   // Data rows
+  //   components.forEach((comp, i) => {
+  //     const row = worksheet.getRow(i + 8);
+  //     const descParts = (comp.Description || "").split("<line>");
+  //     const parent = descParts[0];
+  //     const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN;
+
+  //     // Create rich text for description with bold "GOES INTO" part
+  //     let richText = [];
+  //     if (parent) {
+  //       richText.push({
+  //         text: `GOES INTO ${parent}\n`,
+  //         font: { bold: true, size: 18, name: "Calibri" },
+  //       });
+  //     }
+  //     if (descParts[1]) {
+  //       richText.push({
+  //         text: descParts[1],
+  //         font: { bold: false, size: 18, name: "Calibri" },
+  //       });
+  //     }
+
+  //     // Determine if this is a consumable item and vmi
+  //     const isConsumable =
+  //       comp.ConsumableOrVMI ||
+  //       (comp.Location && (
+  //         comp.Location.toUpperCase().includes("CONSUMABLE")
+  //         || comp.Location.toUpperCase().includes("VMI")
+  //       )) ||
+  //       (comp.LeadHandComments && (
+  //         comp.LeadHandComments.toUpperCase().includes("CONSUMABLE")
+  //         || comp.LeadHandComments.toUpperCase().includes("VMI")
+  //       ));
+
+  //     let totalQty = 0;
+
+  //     const isWire =
+  //       comp.Description && comp.Description.toUpperCase().includes("WIRE");
+
+  //     if (isConsumable) {
+  //       // For consumables, show the per-fixture quantity (no multiplication)
+  //       totalQty = comp.QuantityPerFixture || 0;
+  //     } else if (comp.TDGPN.includes("LABEL")) {
+  //       totalQty = 0;
+  //     } else if (isWire) {
+  //       totalQty = 0;
+  //     } else {
+  //       // For regular items, multiply by fixture quantity
+  //       totalQty = (comp.QuantityPerFixture || 0) * Quantity;
+  //     }
+
+  //     row.values = [
+  //       comp.TDGPN,
+  //       richText.length > 0 ? { richText } : descParts[1] || "",
+  //       comp.Vendor,
+  //       comp.VendorPN,
+  //       comp.QuantityPerFixture,
+  //       totalQty,
+  //       "",
+  //       comp.Location,
+  //       comp.LeadHandComments,
+  //     ];
+
+  //     // create table border for description.....
+  //     for (let c = 1; c <= 9; c++) {
+  //       const cell = row.getCell(c);
+  //       // Apply normal font for B, C, D; bold for others
+  //       const isNormalFont = c === 2 || c === 3 || c === 4;
+  //       cell.font = { size: 18, name: "Calibri", bold: !isNormalFont };
+  //       cell.alignment = {
+  //         wrapText: true,
+  //         vertical: "middle",
+  //         ...(c <= 6 && c !== 2 ? { horizontal: "center" } : {}),
+  //       };
+  //       cell.border = {
+  //         top: { style: "thin" },
+  //         bottom: { style: "thin" },
+  //         left: { style: "thin" },
+  //         right: { style: "thin" },
+  //       };
+  //     }
+
+  //     const qty = totalQty;
+  //     const available = comp.QuantityAvailable || 0;
+  //     if (qty > available && !isConsumable) {
+  //       row.getCell(6).fill = {
+  //         type: "pattern",
+  //         pattern: "lightTrellis",
+  //         fgColor: { argb: "FFFF0000" },
+  //       };
+  //     }
+
+  //     const loc = (comp.Location || "").toUpperCase();
+  //     const locationNumberCheck = comp.Location ? isValidNumberLocationFormat(comp.Location) : false;
+
+  //     const isGray =
+  //       !comp.Location ||                                  // 1. Location is missing or empty
+  //       isConsumable ||                                    // 2. Item is consumable
+  //       loc.includes("INHOUSE") ||                         // 3. Location contains "INHOUSE"
+  //       loc.includes("VMI") ||                             // 4. Location contains "VMI"
+  //       (loc.includes("V") && !loc.includes("HV")) ||      // 5. Location has "V" but not "HV"
+  //       qty === 0
+  //       || locationNumberCheck ;                             // 7. Location not in "number-number-number" format
+  //     if (isGray) {
+  //       for (let c = 1; c <= 9; c++) {
+  //         row.getCell(c).fill = {
+  //           type: "pattern",
+  //           pattern: "solid",
+  //           fgColor: { argb: "FFD3D3D3" },
+  //         };
+  //       }
+  //     }
+  //   });
+
+  // // Step 1: Build maps
+  // const partInfo = new Map();  // partNo → { vendor, hasChildren }
+
+  // worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+  //   if (rowNumber < 8) return;
+
+  //   const tdgpn = (row.getCell(1).value || "").toString().trim().toUpperCase();
+  //   const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+  //   const vendor = (row.getCell(3).value || "").toString().trim().toUpperCase();
+
+  //   if (!tdgpn) return;
+
+  //   // Save vendor for each part
+  //   if (!partInfo.has(tdgpn)) {
+  //     partInfo.set(tdgpn, { vendor, hasChildren: false });
+  //   }
+
+  //   // If this row is a child ("GOES INTO ..."), mark parent as having children
+  //   const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+  //   if (match) {
+  //     const parentPart = match[1];
+  //     if (partInfo.has(parentPart)) {
+  //       partInfo.get(parentPart).hasChildren = true;
+  //     } else {
+  //       partInfo.set(parentPart, { vendor: "", hasChildren: true });
+  //     }
+  //   }
+  // });
+
+  // // Step 2: Apply coloring logic
+  // worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+  //   if (rowNumber < 8) return;
+
+  //   const tdgpn = (row.getCell(1).value || "").toString().trim().toUpperCase();
+  //   const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+
+  //   const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+  //   const isChild = !!match;
+
+  //   let shouldGray = false;
+
+  //   if (isChild) {
+  //     const parentPart = match[1];
+  //     const parentInfo = partInfo.get(parentPart) || { vendor: "" };
+  //     const parentVendor = parentInfo.vendor || "";
+
+  //     // GOES INTO row: gray if parent vendor is NOT TDG or FASTENAL
+  //     shouldGray = !(parentVendor.includes("TDG") || parentVendor.includes("FASTENAL"));
+  //   } else {
+  //     const info = partInfo.get(tdgpn) || { vendor: "", hasChildren: false };
+  //     const { vendor, hasChildren } = info;
+
+  //     // Main row: gray only if vendor is TDG or FASTENAL and has children
+  //     shouldGray = (vendor.includes("TDG") || vendor.includes("FASTENAL")) && hasChildren;
+  //   }
+
+  //   // Apply fill color
+  //   for (let c = 1; c <= 9; c++) {
+  //     row.getCell(c).fill = shouldGray
+  //       ? {
+  //           type: "pattern",
+  //           pattern: "solid",
+  //           fgColor: { argb: "FFD3D3D3" }, // light gray
+  //         }
+  //       : null; // white
+  //   }
+  // });
+
+  // Step 1: Populate the data first (component loop)
   components.forEach((comp, i) => {
     const row = worksheet.getRow(i + 8);
     const descParts = (comp.Description || "").split("<line>");
@@ -726,32 +929,26 @@ async function addSOP(
     // Determine if this is a consumable item and vmi
     const isConsumable =
       comp.ConsumableOrVMI ||
-      (comp.Location && (
-        comp.Location.toUpperCase().includes("CONSUMABLE") ||
-        comp.Location.toUpperCase().includes("VMI")
-      )) ||
-      (comp.LeadHandComments && (
-        comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
-        comp.LeadHandComments.toUpperCase().includes("VMI")
-      ));
+      (comp.Location &&
+        (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+          comp.Location.toUpperCase().includes("VMI"))) ||
+      (comp.LeadHandComments &&
+        (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+          comp.LeadHandComments.toUpperCase().includes("VMI")));
 
     let totalQty = 0;
-
     const isWire =
       comp.Description && comp.Description.toUpperCase().includes("WIRE");
-      
+
     if (isConsumable) {
-      // For consumables, show the per-fixture quantity (no multiplication)
       totalQty = comp.QuantityPerFixture || 0;
-    } else if (comp.TDGPN.includes("LABEL")) {
-      totalQty = 0; 
-    } else if (isWire) {
+    } else if (comp.TDGPN.includes("LABEL") || isWire) {
       totalQty = 0;
     } else {
-      // For regular items, multiply by fixture quantity
       totalQty = (comp.QuantityPerFixture || 0) * Quantity;
     }
 
+    // Set row values
     row.values = [
       comp.TDGPN,
       richText.length > 0 ? { richText } : descParts[1] || "",
@@ -764,11 +961,10 @@ async function addSOP(
       comp.LeadHandComments,
     ];
 
-    // create table border for description.....
+    // Apply normal font, borders, and formatting
     for (let c = 1; c <= 9; c++) {
       const cell = row.getCell(c);
-      // Apply normal font for B, C, D; bold for others
-      const isNormalFont = c === 2 || c === 3 || c === 4;
+      const isNormalFont = c === 2 || c === 3 || c === 4; // B, C, D columns should have normal font
       cell.font = { size: 18, name: "Calibri", bold: !isNormalFont };
       cell.alignment = {
         wrapText: true,
@@ -782,32 +978,141 @@ async function addSOP(
         right: { style: "thin" },
       };
     }
+  });
 
-    const qty = totalQty;
+  // Step 2: Apply color logic after the data is populated (workbook loop)
+
+  const partInfo = new Map(); // partNo → { vendor, hasChildren }
+
+  // Apply vendor-based coloring logic
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber < 8) return;
+
+    const tdgpn = (row.getCell(1).value || "").toString().trim().toUpperCase();
+    const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+    const vendor = (row.getCell(3).value || "").toString().trim().toUpperCase();
+
+    if (!tdgpn) return;
+
+    // Save vendor for each part
+    if (!partInfo.has(tdgpn)) {
+      partInfo.set(tdgpn, { vendor, hasChildren: false });
+    }
+
+    // If this row is a child ("GOES INTO ..."), mark parent as having children
+    const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+    if (match) {
+      const parentPart = match[1];
+      if (partInfo.has(parentPart)) {
+        partInfo.get(parentPart).hasChildren = true;
+      } else {
+        partInfo.set(parentPart, { vendor: "", hasChildren: true });
+      }
+    }
+  });
+
+  // Apply vendor-based coloring for main and child rows
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber < 8) return;
+
+    const tdgpn = (row.getCell(1).value || "").toString().trim().toUpperCase();
+    const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+
+    const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+    const isChild = !!match;
+
+    let shouldGray = false;
+
+    if (isChild) {
+      const parentPart = match[1];
+      const parentInfo = partInfo.get(parentPart) || { vendor: "" };
+      const parentVendor = parentInfo.vendor || "";
+
+      // GOES INTO row: gray if parent vendor is NOT TDG or FASTENAL
+      shouldGray = !(
+        parentVendor.includes("TDG") || parentVendor.includes("FASTENAL")
+      );
+    } else {
+      const info = partInfo.get(tdgpn) || { vendor: "", hasChildren: false };
+      const { vendor, hasChildren } = info;
+
+      // Main row: gray only if vendor is TDG or FASTENAL and has children
+      shouldGray =
+        (vendor.includes("TDG") || vendor.includes("FASTENAL")) && hasChildren;
+    }
+
+    // Apply gray fill (vendor-based coloring)
+    for (let c = 1; c <= 9; c++) {
+      row.getCell(c).fill = shouldGray
+        ? {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFD3D3D3" }, // light gray color
+          }
+        : null; // white
+    }
+  });
+
+  // Step 3: Apply component-based logic (gray and lightTrellis patterns)
+  components.forEach((comp, i) => {
+    const row = worksheet.getRow(i + 8);
+
+    // Define and calculate totalQty for each component inside the loop
+    let totalQty = 0;
+    const isConsumable =
+      comp.ConsumableOrVMI ||
+      (comp.Location &&
+        (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+          comp.Location.toUpperCase().includes("VMI"))) ||
+      (comp.LeadHandComments &&
+        (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+          comp.LeadHandComments.toUpperCase().includes("VMI")));
+
+    const isWire =
+      comp.Description && comp.Description.toUpperCase().includes("WIRE");
+
+    // Calculate totalQty based on component data
+    if (isConsumable) {
+      totalQty = comp.QuantityPerFixture || 0;
+    } else if (comp.TDGPN.includes("LABEL") || isWire) {
+      totalQty = 0;
+    } else {
+      totalQty = (comp.QuantityPerFixture || 0) * comp.Quantity;
+    }
+
     const available = comp.QuantityAvailable || 0;
-    if (qty > available && !isConsumable) {
+
+    // Highlight if quantity exceeds available and not consumable
+    if (totalQty > available && !isConsumable) {
       row.getCell(6).fill = {
         type: "pattern",
         pattern: "lightTrellis",
-        fgColor: { argb: "FFFF0000" },
+        fgColor: { argb: "FFFF0000" }, // red color for over quantity
       };
     }
 
+    // Location-based coloring logic
     const loc = (comp.Location || "").toUpperCase();
+    const locationNumberCheck = comp.Location
+      ? isValidNumberLocationFormat(comp.Location)
+      : false;
+
     const isGray =
-      !comp.Location ||                                  // 1. Location is missing or empty
-      isConsumable ||                                    // 2. Item is consumable
-      loc.includes("INHOUSE") ||                         // 3. Location contains "INHOUSE"
-      loc.includes("VMI") ||                             // 4. Location contains "VMI"
-      (loc.includes("V") && !loc.includes("HV")) ||      // 5. Location has "V" but not "HV"
-      qty === 0 ||                                       // 6. Quantity needed is zero
-      !isValidNumberLocationFormat(comp.Location || ""); // 7. Location not in "number-number-number" format
+      !comp.Location || // Location is missing or empty
+      isConsumable || // Item is consumable
+      loc.includes("INHOUSE") || // Location contains "INHOUSE"
+      loc.includes("VMI") || // Location contains "VMI"
+      (loc.includes("V") && !loc.includes("HV")) || // Location has "V" but not "HV"
+      totalQty === 0 || // No quantity
+      locationNumberCheck; // Location in wrong number format
+
+    // Apply gray fill for conditions (based on consumable, missing location, etc.)
     if (isGray) {
       for (let c = 1; c <= 9; c++) {
         row.getCell(c).fill = {
           type: "pattern",
           pattern: "solid",
-          fgColor: { argb: "FFD3D3D3" },
+          fgColor: { argb: "FFD3D3D3" }, // light gray color
         };
       }
     }
@@ -916,7 +1221,9 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
         tempFixture.Components.map(async (comp) => {
           const split = comp.Level.split(".");
           const parentLevel = split.slice(0, -1).join(".");
-          const tempParent = tempFixture.Components.find((x) => x.Level === parentLevel);
+          const tempParent = tempFixture.Components.find(
+            (x) => x.Level === parentLevel
+          );
           const parent = tempParent ? tempParent.TDGPN : "";
 
           const tempComp = {
@@ -926,12 +1233,16 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
 
           tempComp.QuantityPerFixture = Math.ceil(comp.Quantity); // MidpointRounding.ToPositiveInfinity equivalent
           tempComp.QuantityNeeded = tempComp.QuantityPerFixture * tempQuantity;
-          tempComp.QuantityPerFixture = Math.ceil(refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity);
-      
-          const groupMatch = isDieLists.find(
-            (x) => x.TDGPN === comp.TDGPN && (x.GroupingName === "Die" || x.GroupingName === "Label")
+          tempComp.QuantityPerFixture = Math.ceil(
+            refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity
           );
-          
+
+          const groupMatch = isDieLists.find(
+            (x) =>
+              x.TDGPN === comp.TDGPN &&
+              (x.GroupingName === "Die" || x.GroupingName === "Label")
+          );
+
           if (groupMatch) {
             if (groupMatch.GroupingName === "Die") {
               tempComp.QuantityPerFixture = 0;
@@ -942,7 +1253,7 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
           }
 
           tempComp.Vendor = comp.Vendor;
-          tempComp.VendorPN = comp.VendorPN;  
+          tempComp.VendorPN = comp.VendorPN;
 
           const inventory = await GetInventoryTuple(comp.TDGPN, isIntlUser);
           tempComp.Location = inventory.location;
@@ -1054,7 +1365,6 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
 
       const db = await connectDB("BOMs");
       const tempFixture = await getExplodedBOM(fixture, db);
-      console.log(': ', tempFixture.Description);
       const refFixture = await getStoredFixture(fixture, db);
 
       // Process components in parallel
@@ -1062,7 +1372,9 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         tempFixture.Components.map(async (comp) => {
           const split = comp.Level.split(".");
           const parentLevel = split.slice(0, -1).join(".");
-          const tempParent = tempFixture.Components.find((x) => x.Level === parentLevel);
+          const tempParent = tempFixture.Components.find(
+            (x) => x.Level === parentLevel
+          );
           const parent = tempParent ? tempParent.TDGPN : "";
 
           const tempComp = {
@@ -1072,8 +1384,10 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
 
           tempComp.QuantityPerFixture = Math.ceil(comp.Quantity); // MidpointRounding.ToPositiveInfinity equivalent
           tempComp.QuantityNeeded = tempComp.QuantityPerFixture * tempQuantity;
-          tempComp.QuantityPerFixture = Math.ceil(refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity);
-      
+          tempComp.QuantityPerFixture = Math.ceil(
+            refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity
+          );
+
           const isDieGroup = isDieLists.find(
             (x) => x.TDGPN === comp.TDGPN && x.GroupingName === "Die"
           );
@@ -1084,9 +1398,8 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
           }
 
           tempComp.Vendor = comp.Vendor;
-          tempComp.VendorPN = comp.VendorPN;  
+          tempComp.VendorPN = comp.VendorPN;
           tempComp.UnitOfMeasure = comp.UnitOfMeasure;
-          
 
           const inventory = await GetInventoryTuple(comp.TDGPN, isIntlUser);
           tempComp.Location = inventory.location;
@@ -1100,41 +1413,43 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
       tempComponents.forEach((comp, i) => {
         const descParts = (comp.Description || "").split("<line>");
         const parent = descParts[0];
-        const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN;
-    
+        const isTopLevel =
+          parent && parent.trim() !== "" && parent === comp.TDGPN;
+
         // Create rich text for description with bold "GOES INTO" part
-        let richText ="";
+        let richText = "";
         if (parent) {
           richText += `GOES INTO ${parent}\n`;
         }
         if (descParts[1]) {
           richText += descParts[1];
         }
-    
+
         // Determine if this is a consumable item
         const isConsumable =
           comp.ConsumableOrVMI ||
-          (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
+          (comp.Location &&
+            comp.Location.toUpperCase().includes("CONSUMABLE")) ||
           (comp.LeadHandComments &&
             comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
-    
+
         let totalQty = 0;
-    
+
         const isWire =
           comp.Description && comp.Description.toUpperCase().includes("WIRE");
-          
+
         if (isConsumable) {
           // For consumables, show the per-fixture quantity (no multiplication)
           totalQty = comp.QuantityPerFixture || 0;
         } else if (comp.TDGPN.includes("LABEL")) {
-          totalQty = 0; 
+          totalQty = 0;
         } else if (isWire) {
           totalQty = 0;
         } else {
           // For regular items, multiply by fixture quantity
           totalQty = (comp.QuantityPerFixture || 0) * tempQuantity;
         }
-    
+
         listData.push({
           TDGPN: comp.TDGPN,
           Description: richText || "",
@@ -1150,8 +1465,6 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
           QuantityAvailable: comp.QuantityAvailable,
           ConsumableOrVMI: comp.ConsumableOrVMI,
         });
-        
-         
       });
 
       excelFixtureDetail = {
@@ -1160,16 +1473,16 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         programName: tempSOP.Program.Name,
         fixture,
         tempQuantity,
-        odd: tempSOP.ODD
-      }
+        odd: tempSOP.ODD,
+      };
     }
-    
-    return {excelFixtureDetail,listData};
+
+    return { excelFixtureDetail, listData };
   } catch (err) {
-    console.log('error', err);
-    return listData = [];
+    console.log("error", err);
+    return (listData = []);
   }
-}
+};
 
 const getOpenPickLists = async (fixtureNumber) => {
   try {
@@ -1222,7 +1535,7 @@ const getOpenPickLists = async (fixtureNumber) => {
   }
 };
 
-const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
+const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
   try {
     const workbookCreate = new ExcelJS.Workbook();
 
@@ -1234,14 +1547,14 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         fitToHeight: 0,
       },
     });
-  
+
     // Format the current date to "Month Day, Year"
     const formattedPrintedDate = new Date().toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-  
+
     // Format the required date to "D-MMM-YY" (e.g., 1-Jan-01)
     const formattedRequiredDate = excelFixtureDetail.odd
       ? new Date(excelFixtureDetail.odd)
@@ -1252,7 +1565,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
           })
           .replace(/ /g, "-")
       : "";
-  
+
     // Insert header rows (Row 1-5)
     worksheet.insertRows(1, [
       [
@@ -1268,32 +1581,89 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         "",
         "",
       ],
-      ["PROJECT", excelFixtureDetail.programName || "", "", "", "", "", "PICK LIST LOG NUMBER", "", "", "", ""],
-      ["FIXTURE", excelFixtureDetail.fixture, excelFixtureDetail.description, "", "", "", "DATE PICKED", "", "", "", ""],
-      ["QUANTITY", excelFixtureDetail.tempQuantity, "", "", "", "", "LEAD HAND SIGN OFF", "", "", "", ""],
-      ["REQUIRED ON", formattedRequiredDate, "", "", "", "", "", "", "", "", ""],
+      [
+        "PROJECT",
+        excelFixtureDetail.programName || "",
+        "",
+        "",
+        "",
+        "",
+        "PICK LIST LOG NUMBER",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [
+        "FIXTURE",
+        excelFixtureDetail.fixture,
+        excelFixtureDetail.description,
+        "",
+        "",
+        "",
+        "DATE PICKED",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [
+        "QUANTITY",
+        excelFixtureDetail.tempQuantity,
+        "",
+        "",
+        "",
+        "",
+        "LEAD HAND SIGN OFF",
+        "",
+        "",
+        "",
+        "",
+      ],
+      [
+        "REQUIRED ON",
+        formattedRequiredDate,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+      ],
     ]);
-  
+
     // Merges
-    ["C1:F1", "G1:H1", "G2:H2", "C3:F5", "G3:H3", "G4:H5","I3:J3","I2:J2", "I1:J1", "I4:J5"].forEach(
-      (range) => worksheet.mergeCells(range)
-    );
-  
+    [
+      "C1:F1",
+      "G1:H1",
+      "G2:H2",
+      "C3:F5",
+      "G3:H3",
+      "G4:H5",
+      "I3:J3",
+      "I2:J2",
+      "I1:J1",
+      "I4:J5",
+    ].forEach((range) => worksheet.mergeCells(range));
+
     // Column widths
     [
       22.28, // TDG PART NO
-      69,    // DESCRIPTION
+      69, // DESCRIPTION
       22.42, // VENDOR
-      27,    // VENDOR P/N
+      27, // VENDOR P/N
       11.57, // PER FIX QTY.
       13.28, // TOTAL QTY NEEDED
       19, // ACTUAL QTY PICKED
       21.57, // UNIT OF MEASURE
       11.57, // QUANTITY TO BE PICKED
-      25,    // LOCATION / PURCHASING COMMENTS (increased)
-      19     // LEAD HAND COMMENTS (also increased)
+      25, // LOCATION / PURCHASING COMMENTS (increased)
+      19, // LEAD HAND COMMENTS (also increased)
     ].forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
-  
+
     // Row 7 headers
     const headers = [
       "TDG PART NO",
@@ -1323,7 +1693,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         fgColor: { argb: "D9E1F2" },
       };
     });
-  
+
     // Apply borders and fonts to header rows
     for (let r = 1; r <= 5; r++) {
       for (let c = 1; c <= 9; c++) {
@@ -1336,7 +1706,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         };
       }
     }
-  
+
     // Apply bold borders to second table (starting from Row 7)
     for (let row = 7; row <= worksheet.rowCount; row++) {
       for (let col = 1; col <= 11; col++) {
@@ -1349,7 +1719,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         };
       }
     }
-  
+
     // Font + fill for header info cells
     const headerFontCells = ["A", "B", "G"].flatMap((col) =>
       [1, 2, 3, 4].map((row) => `${col}${row}`)
@@ -1372,7 +1742,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
           };
         }
       });
-  
+
     for (let r = 1; r <= 5; r++) {
       worksheet.getCell(`I${r}`).alignment = {
         horizontal: "center",
@@ -1380,14 +1750,16 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
       };
     }
     // worksheet.getColumn(9).width = 20;
-  
+
     // Data rows
     sheetlistData.forEach((comp, i) => {
       const row = worksheet.getRow(i + 8);
-      const descParts = (comp.Description || "").includes("GOES INTO") ? true :false;
+      const descParts = (comp.Description || "").includes("GOES INTO")
+        ? true
+        : false;
       const parent = descParts;
       // const isTopLevel = parent && parent.trim() !== "" && parent === comp.TDGPN;
-  
+
       // Create rich text for description with bold "GOES INTO" part
       let richText = [];
       if (parent) {
@@ -1395,41 +1767,41 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
           text: comp.Description,
           font: { bold: true, size: 18, name: "Calibri" },
         });
-      }
-     else {
+      } else {
         richText.push({
           text: comp.Description,
           font: { bold: false, size: 18, name: "Calibri" },
         });
       }
-  
+
       // Determine if this is a consumable item
       const isConsumable =
         comp.ConsumableOrVMI ||
         (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
         (comp.LeadHandComments &&
           comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
-  
+
       let totalQty = 0;
-  
+
       const isWire =
         comp.Description && comp.Description.toUpperCase().includes("WIRE");
-        
+
       if (isConsumable) {
         // For consumables, show the per-fixture quantity (no multiplication)
         totalQty = comp.QuantityPerFixture || 0;
       } else if (comp.TDGPN.includes("LABEL")) {
-        totalQty = 0; 
+        totalQty = 0;
       } else if (isWire) {
         totalQty = 0;
       } else {
         // For regular items, multiply by fixture quantity
-        totalQty = (comp.QuantityPerFixture || 0) * excelFixtureDetail.tempQuantity;
+        totalQty =
+          (comp.QuantityPerFixture || 0) * excelFixtureDetail.tempQuantity;
       }
-  
+
       row.values = [
         comp.TDGPN,
-        richText.length > 0 ? { richText } :comp.Description || "",
+        richText.length > 0 ? { richText } : comp.Description || "",
         comp.Vendor,
         comp.VendorPN,
         comp.QuantityPerFixture,
@@ -1447,11 +1819,11 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         // Apply normal font for B, C, D; bold for others
         const isNormalFont = c === 2 || c === 3 || c === 4;
         cell.font = { size: 18, name: "Calibri", bold: !isNormalFont };
-      
+
         cell.alignment = {
           wrapText: true,
           vertical: "middle",
-          horizontal: (c === 2 ? "left" : "center"),  // only Description left, everything else centered
+          horizontal: c === 2 ? "left" : "center", // only Description left, everything else centered
         };
         cell.border = {
           top: { style: "thin" },
@@ -1460,7 +1832,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
           right: { style: "thin" },
         };
       }
-  
+
       const qty = totalQty;
       const available = comp.QuantityAvailable || 0;
       if (qty > available && !isConsumable) {
@@ -1470,7 +1842,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
           fgColor: { argb: "FFFF0000" },
         };
       }
-  
+
       const loc = (comp.Location || "").toUpperCase();
       const isGray =
         isConsumable ||
@@ -1487,7 +1859,7 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         }
       }
     });
-  
+
     // last row set gray color
     const finalRow = worksheet.getRow(sheetlistData.length + 8);
     for (let c = 1; c <= 11; c++) {
@@ -1497,10 +1869,13 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
         fgColor: { argb: "FFA9A9A9" },
       };
     }
-  
+
     // Heading font + alignment
     worksheet.getCell("C1").font = { bold: true, size: 18 };
-    worksheet.getCell("C1").alignment = { horizontal: "center", vertical: "top" };
+    worksheet.getCell("C1").alignment = {
+      horizontal: "center",
+      vertical: "top",
+    };
     worksheet.getCell("C3").font = { size: 18 };
     ["A", "B"].forEach((col) =>
       [1, 2, 3, 4, 5].forEach(
@@ -1513,7 +1888,9 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
     ["G", "H"].forEach((col) =>
       [1, 2, 3, 4, 5].forEach(
         (row) =>
-          (worksheet.getCell(`${col}${row}`).alignment = { horizontal: "center" })
+          (worksheet.getCell(`${col}${row}`).alignment = {
+            horizontal: "center",
+          })
       )
     );
     ["C1", "C2", "C3", "C4", "C5"].forEach(
@@ -1523,13 +1900,13 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
           vertical: "top",
         })
     );
-  
+
     worksheet.getCell("C3").alignment = {
       horizontal: "center",
       vertical: "top",
       wrapText: true,
     };
-  
+
     worksheet.views = [{ showGridLines: false }];
 
     const buffer = await workbookCreate.xlsx.writeBuffer();
@@ -1539,8 +1916,12 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
     const month = now.toLocaleString("en-US", { month: "short" });
     const day = String(now.getDate()).padStart(2, "0");
     const dateStr = `${month}-${day}`;
-    const safeFixture = excelFixtureDetail.fixture.replace(/[\\/:*?"<>|]/g, "-"); // Avoid filename issues
-    const fileName = excelFixtureDetail.sopNum + " (" + safeFixture + ") " + dateStr + ".xlsx";
+    const safeFixture = excelFixtureDetail.fixture.replace(
+      /[\\/:*?"<>|]/g,
+      "-"
+    ); // Avoid filename issues
+    const fileName =
+      excelFixtureDetail.sopNum + " (" + safeFixture + ") " + dateStr + ".xlsx";
 
     res.setHeader(
       "Content-Disposition",
@@ -1554,10 +1935,10 @@ const updatedSheetDownload = async (excelFixtureDetail,sheetlistData,res) => {
     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition");
     res.send(buffer);
   } catch (error) {
-    console.log('error', error);
+    console.log("error", error);
     res.failureResponse({ message: error.message });
   }
-}
+};
 
 exports.SOPSerchService = async (req, res) => {
   try {
@@ -1595,11 +1976,11 @@ exports.SOPSerchService = async (req, res) => {
     let backorderEntryResult = [];
 
     if (LeadHandEntryResults.length) {
-      backorderEntryResult =await Promise.all(
+      backorderEntryResult = await Promise.all(
         LeadHandEntryResults.map(async (e) => {
           const backorderResults = await pool
-          .request()
-          .input("SOPLeadHandEntryId", sql.Int, e.SOPLeadHandEntryId).query(`
+            .request()
+            .input("SOPLeadHandEntryId", sql.Int, e.SOPLeadHandEntryId).query(`
             SELECT *
             FROM [SOP].[dbo].[SOPBackorderEntries]
             WHERE SOPLeadHandEntryId = @SOPLeadHandEntryId
@@ -1809,9 +2190,9 @@ exports.getSheetsBomData = async (req, res) => {
   try {
     const { lhrEntryId, user } = req.query;
 
-    const sheetBOMsData= await getPickListData(
+    const sheetBOMsData = await getPickListData(
       { LHREntries: [parseInt(lhrEntryId)] },
-      user,
+      user
     );
 
     return res.ok({
@@ -1826,19 +2207,17 @@ exports.getSheetsBomData = async (req, res) => {
 
 exports.downloadupdatedDataSheets = async (req, res) => {
   try {
-    const {  sheetData ,excelFixtureDetail } = req.body;
+    const { sheetData, excelFixtureDetail } = req.body;
 
-
-    if(!sheetData || sheetData.length === 0){
+    if (!sheetData || sheetData.length === 0) {
       return res.badRequest({ message: "Sheet Data is required" });
     }
 
-    if(!excelFixtureDetail || Object.keys(excelFixtureDetail).length === 0){
+    if (!excelFixtureDetail || Object.keys(excelFixtureDetail).length === 0) {
       return res.badRequest({ message: "Excel Fixture Detail is required" });
     }
 
-   await updatedSheetDownload(excelFixtureDetail,sheetData,res);
-
+    await updatedSheetDownload(excelFixtureDetail, sheetData, res);
   } catch (err) {
     console.log("error:", err);
     return res.failureResponse({ message: err.message });
