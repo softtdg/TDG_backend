@@ -71,7 +71,7 @@ const getMasterList = async () => {
   }
 };
 
-const getAllDieList = async () => {
+const getAllDieAndLabelList = async () => {
   try {
     const pool = await getDbPool("Design");
 
@@ -104,7 +104,7 @@ const getAllDieList = async () => {
         ON G.GroupEntryId = ML.GroupingGroupEntryId
       LEFT JOIN [Design].[dbo].[UOMs] UOM 
         ON UOM.UOMEntryId = ML.UnitOfMeasureUOMEntryId
-      WHERE G.Name = 'Die'
+      WHERE G.Name IN ('Die', 'Label');
     `);
 
     return result.recordset;
@@ -723,12 +723,17 @@ async function addSOP(
       });
     }
 
-    // Determine if this is a consumable item
+    // Determine if this is a consumable item and vmi
     const isConsumable =
       comp.ConsumableOrVMI ||
-      (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
-      (comp.LeadHandComments &&
-        comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
+      (comp.Location && (
+        comp.Location.toUpperCase().includes("CONSUMABLE") ||
+        comp.Location.toUpperCase().includes("VMI")
+      )) ||
+      (comp.LeadHandComments && (
+        comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+        comp.LeadHandComments.toUpperCase().includes("VMI")
+      ));
 
     let totalQty = 0;
 
@@ -790,11 +795,13 @@ async function addSOP(
 
     const loc = (comp.Location || "").toUpperCase();
     const isGray =
-      isConsumable ||
-      loc.includes("INHOUSE") || loc.includes("VMI") || loc.includes("LABEL") ||
-      (loc.includes("V") && !loc.includes("HV")) ||
-      qty === 0 ||
-      !isValidNumberLocationFormat(comp.Location || "");
+      !comp.Location ||                                  // 1. Location is missing or empty
+      isConsumable ||                                    // 2. Item is consumable
+      loc.includes("INHOUSE") ||                         // 3. Location contains "INHOUSE"
+      loc.includes("VMI") ||                             // 4. Location contains "VMI"
+      (loc.includes("V") && !loc.includes("HV")) ||      // 5. Location has "V" but not "HV"
+      qty === 0 ||                                       // 6. Quantity needed is zero
+      !isValidNumberLocationFormat(comp.Location || ""); // 7. Location not in "number-number-number" format
     if (isGray) {
       for (let c = 1; c <= 9; c++) {
         row.getCell(c).fill = {
@@ -859,7 +866,7 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
 
     let sopNum = "-";
     // const ml = await getMasterList();
-    const isDieLists = await getAllDieList();
+    const isDieLists = await getAllDieAndLabelList();
 
     const workbook = new ExcelJS.Workbook();
 
@@ -921,13 +928,17 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
           tempComp.QuantityNeeded = tempComp.QuantityPerFixture * tempQuantity;
           tempComp.QuantityPerFixture = Math.ceil(refFixture?.Components?.find((x) => x.Level === comp.Level).Quantity);
       
-          const isDieGroup = isDieLists.find(
-            (x) => x.TDGPN === comp.TDGPN && x.GroupingName === "Die"
+          const groupMatch = isDieLists.find(
+            (x) => x.TDGPN === comp.TDGPN && (x.GroupingName === "Die" || x.GroupingName === "Label")
           );
-
-          if (isDieGroup) {
-            tempComp.QuantityPerFixture = 0;
-            tempComp.QuantityNeeded = 0;
+          
+          if (groupMatch) {
+            if (groupMatch.GroupingName === "Die") {
+              tempComp.QuantityPerFixture = 0;
+              tempComp.QuantityNeeded = 0;
+            } else if (groupMatch.GroupingName === "Label") {
+              tempComp.QuantityNeeded = 0;
+            }
           }
 
           tempComp.Vendor = comp.Vendor;
@@ -1005,7 +1016,7 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
 
     let sopNum = "-";
     // const ml = await getMasterList();
-    const isDieLists = await getAllDieList();
+    const isDieLists = await getAllDieAndLabelList();
 
     const workbook = new ExcelJS.Workbook();
 
