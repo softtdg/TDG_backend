@@ -1461,7 +1461,6 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
           Location: comp.Location,
           LeadHandComments: "",
           UnitOfMeasure: comp.UnitOfMeasure,
-          QuantityToBePicked: "",
           QuantityAvailable: comp.QuantityAvailable,
           ConsumableOrVMI: comp.ConsumableOrVMI,
         });
@@ -1659,7 +1658,6 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       13.28, // TOTAL QTY NEEDED
       19, // ACTUAL QTY PICKED
       21.57, // UNIT OF MEASURE
-      11.57, // QUANTITY TO BE PICKED
       25, // LOCATION / PURCHASING COMMENTS (increased)
       19, // LEAD HAND COMMENTS (also increased)
     ].forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
@@ -1674,7 +1672,6 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       "TOTAL QTY NEEDED",
       "ACTUAL QTY PICKED",
       "UNIT OF MEASURE",
-      "QUANTITY TO BE PICKED",
       "LOCATION/ PURCHASING COMMENTS",
       "LEAD HAND COMMENTS",
     ];
@@ -1709,7 +1706,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
 
     // Apply bold borders to second table (starting from Row 7)
     for (let row = 7; row <= worksheet.rowCount; row++) {
-      for (let col = 1; col <= 11; col++) {
+      for (let col = 1; col <= 10; col++) {
         const cell = worksheet.getRow(row).getCell(col);
         cell.border = {
           top: { style: "thin" },
@@ -1806,15 +1803,14 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
         comp.VendorPN,
         comp.QuantityPerFixture,
         totalQty,
-        "",
+        comp.ActualQtyPicked || "",
         comp.UnitOfMeasure,
-        comp.QuantityToBePicked,
         comp.Location,
         comp.LeadHandComments,
       ];
 
       // create table border for description.....
-      for (let c = 1; c <= 11; c++) {
+      for (let c = 1; c <= 10; c++) {
         const cell = row.getCell(c);
         // Apply normal font for B, C, D; bold for others
         const isNormalFont = c === 2 || c === 3 || c === 4;
@@ -1850,7 +1846,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
         (loc.includes("V") && !loc.includes("HV")) ||
         qty === 0;
       if (isGray) {
-        for (let c = 1; c <= 11; c++) {
+        for (let c = 1; c <= 10; c++) {
           row.getCell(c).fill = {
             type: "pattern",
             pattern: "solid",
@@ -1862,7 +1858,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
 
     // last row set gray color
     const finalRow = worksheet.getRow(sheetlistData.length + 8);
-    for (let c = 1; c <= 11; c++) {
+    for (let c = 1; c <= 10; c++) {
       finalRow.getCell(c).fill = {
         type: "pattern",
         pattern: "solid",
@@ -2188,12 +2184,24 @@ exports.downloadPickList = async (req, res) => {
 
 exports.getSheetsBomData = async (req, res) => {
   try {
-    const { lhrEntryId, user } = req.query;
+    const { lhrEntryId, user, fixture } = req.query;
 
-    const sheetBOMsData = await getPickListData(
-      { LHREntries: [parseInt(lhrEntryId)] },
-      user
-    );
+    if (!user) {
+      return res.badRequest({ message: "User is required" });
+    }
+
+    let sheetBOMsData = [];
+
+    if (lhrEntryId) {
+      sheetBOMsData = await getPickListData(
+        { LHREntries: [parseInt(lhrEntryId)] },
+        user
+      );
+    } else {
+      const fixedFixture = fixFixtureName(fixture);
+      // Call for blank pick list using fixture number
+      sheetBOMsData = await getPickListData(null, user, fixedFixture);
+    }
 
     return res.ok({
       message: "Successfully fetched sheet BOMs data",
