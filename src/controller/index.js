@@ -1065,6 +1065,82 @@ async function addSOP(
     }
   });
 
+  // --------------------------------------------------------------------------------------------------------------------------
+  // NEW LOGIC: Gray main part if:
+  // - Main part has NO vendor
+  // - Has children (GOES INTO)
+  // - ALL children have valid Location
+  // → Main part = gray, Children = white
+
+  const childToParentMap = new Map(); // childTDGPN → parentTDGPN
+  const parentToChildrenMap = new Map(); // parentTDGPN → array of children (rowNumber, hasLocation)
+  const tdgpnRowMap = new Map(); // TDGPN → row
+
+  // First pass: Build parent-child relationships and gather the required information
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber < 8) return;
+
+    const tdgpn = (row.getCell(1).value || "").toString().trim().toUpperCase();
+    const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+    const location = (row.getCell(8).value || "").toString().trim();
+    const vendor = (row.getCell(3).value || "").toString().trim().toUpperCase();
+
+    if (!tdgpn) return;
+
+    tdgpnRowMap.set(tdgpn, { row, vendor });
+
+    const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+    if (match) {
+      const parent = match[1];
+      childToParentMap.set(tdgpn, parent);
+
+      if (!parentToChildrenMap.has(parent)) {
+        parentToChildrenMap.set(parent, []);
+      }
+
+      parentToChildrenMap.get(parent).push({
+        row,
+        hasLocation: location !== "",
+      });
+    }
+  });
+
+  // Step 2: Apply new logic: Gray parent if it has no vendor, has children, and all children have locations
+  parentToChildrenMap.forEach((children, parentTDGPN) => {
+    const parentData = tdgpnRowMap.get(parentTDGPN);
+
+    if (!parentData) return;
+
+    const { row: parentRow, vendor } = parentData;
+
+    // Check if all children have location
+    const allChildrenHaveLocation = children.every((c) => c.hasLocation);
+
+    // Apply the new graying logic if needed
+    if (!vendor && allChildrenHaveLocation && children.length > 0) {
+      // ✅ Gray the parent
+      for (let c = 1; c <= 9; c++) {
+        parentRow.getCell(c).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFD3D3D3" }, // gray
+        };
+      }
+
+      // ✅ Ensure children are white (override other gray fills if any)
+      children.forEach(({ row }) => {
+        for (let c = 1; c <= 9; c++) {
+          row.getCell(c).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFFFFF" }, // white
+          };
+        }
+      });
+    }
+  });
+  //--------------------------------------------------------------------------------------------------------------------
+
   // Step 3: Apply component-based logic (gray and lightTrellis patterns)
   components.forEach((comp, i) => {
     const row = worksheet.getRow(i + 8);
@@ -1799,9 +1875,12 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       // Determine if this is a consumable item
       const isConsumable =
         comp.ConsumableOrVMI ||
-        (comp.Location && comp.Location.toUpperCase().includes("CONSUMABLE")) ||
+        (comp.Location &&
+          (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+            comp.Location.toUpperCase().includes("VMI"))) ||
         (comp.LeadHandComments &&
-          comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
+          (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+            comp.LeadHandComments.toUpperCase().includes("VMI")));
 
       let totalQty = 0;
 
@@ -1853,33 +1932,267 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
           right: { style: "thin" },
         };
       }
+      //-------------------------------------------------------------------------------------------------------------------
 
-      const qty = totalQty;
+      // const qty = totalQty;
+      // const available = comp.QuantityAvailable || 0;
+      // if (qty > available && !isConsumable) {
+      //   row.getCell(7).fill = {
+      //     type: "pattern",
+      //     pattern: "lightTrellis",
+      //     fgColor: { argb: "FFFF0000" },
+      //   };
+      // }
+
+      // const loc = (comp.Location || "").toUpperCase();
+      // const isGray =
+      //   isConsumable ||
+      //   loc.includes("INHOUSE") ||
+      //   (loc.includes("V") && !loc.includes("HV")) ||
+      //   qty === 0;
+      // if (isGray) {
+      //   for (let c = 1; c <= 10; c++) {
+      //     row.getCell(c).fill = {
+      //       type: "pattern",
+      //       pattern: "solid",
+      //       fgColor: { argb: "FFD3D3D3" },
+      //     };
+      //   }
+      // }
+    });
+
+    // Step 2: Apply color logic after the data is populated (workbook loop)
+
+    const partInfo = new Map(); // partNo → { vendor, hasChildren }
+
+    // Apply vendor-based coloring logic
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber < 8) return;
+
+      const tdgpn = (row.getCell(1).value || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+      const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+      const vendor = (row.getCell(3).value || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+
+      if (!tdgpn) return;
+
+      // Save vendor for each part
+      if (!partInfo.has(tdgpn)) {
+        partInfo.set(tdgpn, { vendor, hasChildren: false });
+      }
+
+      // If this row is a child ("GOES INTO ..."), mark parent as having children
+      const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+      if (match) {
+        const parentPart = match[1];
+        if (partInfo.has(parentPart)) {
+          partInfo.get(parentPart).hasChildren = true;
+        } else {
+          partInfo.set(parentPart, { vendor: "", hasChildren: true });
+        }
+      }
+    });
+
+    // Apply vendor-based coloring for main and child rows
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber < 8) return;
+
+      const tdgpn = (row.getCell(1).value || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+      const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+
+      const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+      const isChild = !!match;
+
+      let shouldGray = false;
+
+      if (isChild) {
+        const parentPart = match[1];
+        const parentInfo = partInfo.get(parentPart) || { vendor: "" };
+        const parentVendor = parentInfo.vendor || "";
+
+        // GOES INTO row: gray if parent vendor is NOT TDG or FASTENAL
+        shouldGray = !(
+          parentVendor.includes("TDG") || parentVendor.includes("FASTENAL")
+        );
+      } else {
+        const info = partInfo.get(tdgpn) || { vendor: "", hasChildren: false };
+        const { vendor, hasChildren } = info;
+
+        // Main row: gray only if vendor is TDG or FASTENAL and has children
+        shouldGray =
+          (vendor.includes("TDG") || vendor.includes("FASTENAL")) &&
+          hasChildren;
+      }
+
+      // Apply gray fill (vendor-based coloring)
+      for (let c = 1; c <= 9; c++) {
+        row.getCell(c).fill = shouldGray
+          ? {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFD3D3D3" }, // light gray color
+            }
+          : null; // white
+      }
+    });
+    // NEW LOGIC: Gray main part if:
+    // - Main part has NO vendor
+    // - Has children (GOES INTO)
+    // - ALL children have valid Location
+    // → Main part = gray, Children = white
+
+    const childToParentMap = new Map(); // childTDGPN → parentTDGPN
+    const parentToChildrenMap = new Map(); // parentTDGPN → array of children (rowNumber, hasLocation)
+    const tdgpnRowMap = new Map(); // TDGPN → row
+
+    // First pass: Build parent-child relationships and gather the required information
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber < 8) return;
+
+      const tdgpn = (row.getCell(1).value || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+      const desc = getCellText(row.getCell(2)).toUpperCase().trim();
+      const location = (row.getCell(8).value || "").toString().trim();
+      const vendor = (row.getCell(3).value || "")
+        .toString()
+        .trim()
+        .toUpperCase();
+
+      if (!tdgpn) return;
+
+      tdgpnRowMap.set(tdgpn, { row, vendor });
+
+      const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+      if (match) {
+        const parent = match[1];
+        childToParentMap.set(tdgpn, parent);
+
+        if (!parentToChildrenMap.has(parent)) {
+          parentToChildrenMap.set(parent, []);
+        }
+
+        parentToChildrenMap.get(parent).push({
+          row,
+          hasLocation: location !== "",
+        });
+      }
+    });
+
+    // Step 2: Apply new logic: Gray parent if it has no vendor, has children, and all children have locations
+    parentToChildrenMap.forEach((children, parentTDGPN) => {
+      const parentData = tdgpnRowMap.get(parentTDGPN);
+
+      if (!parentData) return;
+
+      const { row: parentRow, vendor } = parentData;
+
+      // Check if all children have location
+      const allChildrenHaveLocation = children.every((c) => c.hasLocation);
+
+      // Apply the new graying logic if needed
+      if (!vendor && allChildrenHaveLocation && children.length > 0) {
+        // ✅ Gray the parent
+        for (let c = 1; c <= 9; c++) {
+          parentRow.getCell(c).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFD3D3D3" }, // gray
+          };
+        }
+
+        // ✅ Ensure children are white (override other gray fills if any)
+        children.forEach(({ row }) => {
+          for (let c = 1; c <= 9; c++) {
+            row.getCell(c).fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFFFFFF" }, // white
+            };
+          }
+        });
+      }
+    });
+
+    // Data rows
+    sheetlistData.forEach((comp, i) => {
+      const row = worksheet.getRow(i + 8);
+
+      // Determine if this is a consumable item
+      const isConsumable =
+        comp.ConsumableOrVMI ||
+        (comp.Location &&
+          (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+            comp.Location.toUpperCase().includes("VMI"))) ||
+        (comp.LeadHandComments &&
+          (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+            comp.LeadHandComments.toUpperCase().includes("VMI")));
+
+      let totalQty = 0;
+
+      const isWire =
+        comp.Description && comp.Description.toUpperCase().includes("WIRE");
+
+      if (isConsumable) {
+        // For consumables, show the per-fixture quantity (no multiplication)
+        totalQty = comp.QuantityPerFixture || 0;
+      } else if (comp.TDGPN.includes("LABEL")) {
+        totalQty = 0;
+      } else if (isWire) {
+        totalQty = 0;
+      } else {
+        // For regular items, multiply by fixture quantity
+        totalQty =
+          (comp.QuantityPerFixture || 0) * excelFixtureDetail.tempQuantity;
+      }
+
       const available = comp.QuantityAvailable || 0;
-      if (qty > available && !isConsumable) {
-        row.getCell(7).fill = {
+
+      // Highlight if quantity exceeds available and not consumable
+      if (totalQty > available && !isConsumable) {
+        row.getCell(6).fill = {
           type: "pattern",
           pattern: "lightTrellis",
-          fgColor: { argb: "FFFF0000" },
+          fgColor: { argb: "FFFF0000" }, // red color for over quantity
         };
       }
 
+      // Location-based coloring logic
       const loc = (comp.Location || "").toUpperCase();
+      const locationNumberCheck = comp.Location
+        ? isValidNumberLocationFormat(comp.Location)
+        : false;
+
       const isGray =
-        isConsumable ||
-        loc.includes("INHOUSE") ||
-        (loc.includes("V") && !loc.includes("HV")) ||
-        qty === 0;
+        !comp.Location || // Location is missing or empty
+        isConsumable || // Item is consumable
+        loc.includes("INHOUSE") || // Location contains "INHOUSE"
+        loc.includes("VMI") || // Location contains "VMI"
+        (loc.includes("V") && !loc.includes("HV")) || // Location has "V" but not "HV"
+        totalQty === 0 || // No quantity
+        locationNumberCheck; // Location in wrong number format
+
+      // Apply gray fill for conditions (based on consumable, missing location, etc.)
       if (isGray) {
-        for (let c = 1; c <= 10; c++) {
+        for (let c = 1; c <= 9; c++) {
           row.getCell(c).fill = {
             type: "pattern",
             pattern: "solid",
-            fgColor: { argb: "FFD3D3D3" },
+            fgColor: { argb: "FFD3D3D3" }, // light gray color
           };
         }
       }
     });
+    //-------------------------------------------------------------------------------------------------------------------
 
     // last row set gray color
     const finalRow = worksheet.getRow(sheetlistData.length + 8);
