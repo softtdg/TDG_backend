@@ -566,7 +566,6 @@ function getCellText(cell) {
   if (cell.value.text) return cell.value.text;
   if (cell.value.result) return cell.value.result.toString();
 
-  console.log(": cell.value", cell.value);
 
   return cell.value.toString();
 }
@@ -1404,10 +1403,179 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
     return res.failureResponse({ message: err.message });
   }
 };
+function buildPicklistData(components, fixtureDescription, Quantity) {
+  let listData = [];
+
+  // --------------------------------------------------------------------------------
+  // STEP 1: Build partInfo (TDGPN → { vendor, hasChildren })
+  const partInfo = new Map();
+
+  components.forEach(comp => {
+    const tdgpn = (comp.TDGPN || "").toUpperCase();
+    const desc = (comp.Description || "").toUpperCase();
+
+    if (!tdgpn) return;
+
+    if (!partInfo.has(tdgpn)) {
+      partInfo.set(tdgpn, { vendor: (comp.Vendor || "").toUpperCase(), hasChildren: false });
+    }
+
+    // If this row is a child ("GOES INTO ..."), mark parent
+    const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+    if (match) {
+      const parentPart = match[1];
+      if (partInfo.has(parentPart)) {
+        partInfo.get(parentPart).hasChildren = true;
+      } else {
+        partInfo.set(parentPart, { vendor: "", hasChildren: true });
+      }
+    }
+  });
+
+  // --------------------------------------------------------------------------------
+  // STEP 2: Build parent–child mapping for "all children have location" logic
+  const childToParentMap = new Map();
+  const parentToChildrenMap = new Map();
+  const tdgpnMap = new Map(); // TDGPN → { vendor, comp }
+
+  components.forEach(comp => {
+    const tdgpn = (comp.TDGPN || "").toUpperCase();
+    const desc = (comp.Description || "").toUpperCase();
+    const location = (comp.Location || "").trim();
+    const vendor = (comp.Vendor || "").toUpperCase();
+
+    if (!tdgpn) return;
+    tdgpnMap.set(tdgpn, { vendor, comp });
+
+    const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+    if (match) {
+      const parent = match[1];
+      childToParentMap.set(tdgpn, parent);
+
+      if (!parentToChildrenMap.has(parent)) {
+        parentToChildrenMap.set(parent, []);
+      }
+
+      parentToChildrenMap.get(parent).push({
+        tdgpn,
+        hasLocation: location !== ""
+      });
+    }
+  });
+
+  // --------------------------------------------------------------------------------
+  // STEP 3: Build listData with flags
+  components.forEach(comp => {
+    const tdgpn = (comp.TDGPN || "").toUpperCase();
+    const desc = (comp.Description || "").toUpperCase();
+    const vendor = (comp.Vendor || "").toUpperCase();
+
+    const qtyPerFixture = comp.QuantityPerFixture || 0;
+    const totalQty = qtyPerFixture * Quantity;
+    const available = comp.QuantityAvailable || 0;
+
+    // Consumable detection
+    const isConsumable =
+          comp.ConsumableOrVMI ||
+          (comp.Location &&
+            (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+              comp.Location.toUpperCase().includes("VMI"))) ||
+          (comp.LeadHandComments &&
+            (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+              comp.LeadHandComments.toUpperCase().includes("VMI")));
+
+    const isWire = desc.includes("WIRE");
+
+    // --- total qty logic
+    let finalTotalQty = 0;
+    if (isConsumable) {
+      finalTotalQty = qtyPerFixture;
+    } else if (tdgpn.includes("LABEL") || isWire) {
+      finalTotalQty = 0;
+    } else {
+      finalTotalQty = qtyPerFixture * Quantity;
+    }
+
+    // --- Flags
+    let isGray = false;
+    let isLightTrellis = false;
+
+    // A. GOES INTO child logic
+    const match = desc.match(/GOES INTO\s+([A-Z0-9-]+)/);
+    const isChild = !!match;
+
+    if (isChild) {
+      const parentPart = match[1];
+      const parentInfo = partInfo.get(parentPart) || { vendor: "" };
+      const parentVendor = parentInfo.vendor || "";
+
+      // GOES INTO row: gray if parent vendor is NOT TDG or FASTENAL
+      isGray = !(parentVendor.includes("TDG") || parentVendor.includes("FASTENAL"));
+    } else {
+      const info = partInfo.get(tdgpn) || { vendor: "", hasChildren: false };
+      const { vendor: mainVendor, hasChildren } = info;
+
+      // Main row: gray only if vendor is TDG or FASTENAL AND has children
+      isGray = (mainVendor.includes("TDG") || mainVendor.includes("FASTENAL")) && hasChildren;
+    }
+
+    // B. New rule: gray parent with no vendor, has children, and all children have location
+    if (parentToChildrenMap.has(tdgpn)) {
+      const children = parentToChildrenMap.get(tdgpn);
+      const allChildrenHaveLocation = children.every(c => c.hasLocation);
+      if (!vendor && allChildrenHaveLocation && children.length > 0) {
+        isGray = true;
+      }
+    }
+
+    // C. Shortage → lightTrellis
+    if (finalTotalQty > available && !isConsumable) {
+      isLightTrellis = true;
+    }
+
+    // D. Location-based gray
+    const loc = (comp.Location || "").toUpperCase();
+    const locationNumberCheck = comp.Location
+      ? isValidNumberLocationFormat(comp.Location)
+      : false;
+
+    if (
+      !comp.Location ||
+      isConsumable ||
+      loc.includes("INHOUSE") ||
+      loc.includes("VMI") ||
+      (loc.includes("V") && !loc.includes("HV")) ||
+      finalTotalQty === 0 ||
+      locationNumberCheck
+    ) {
+      isGray = true;
+    }
+
+    listData.push({
+      TDGPN: comp.TDGPN,
+      Description: comp.Description,
+      Vendor: comp.Vendor,
+      VendorPN: comp.VendorPN,
+      QuantityPerFixture: qtyPerFixture,
+      TotalQtyNeeded: finalTotalQty,
+      ActualQtyPicked: "",
+      Location: comp.Location,
+      LeadHandComments: comp.LeadHandComments,
+      UnitOfMeasure: comp.UnitOfMeasure,
+      QuantityAvailable: comp.QuantityAvailable,
+      ConsumableOrVMI: comp.ConsumableOrVMI,
+      isGray,
+      isLightTrellis
+    });
+  });
+
+  return listData;
+}
 
 const getPickListData = async (lhrEntryId, user, fixtureParam) => {
   try {
     const listData = [];
+    let finalData = [];
     let excelFixtureDetail = {};
     const vm = lhrEntryId || { LHREntries: [0] };
     // const user = user || null;
@@ -1517,9 +1685,11 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         const isConsumable =
           comp.ConsumableOrVMI ||
           (comp.Location &&
-            comp.Location.toUpperCase().includes("CONSUMABLE")) ||
+            (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+              comp.Location.toUpperCase().includes("VMI"))) ||
           (comp.LeadHandComments &&
-            comp.LeadHandComments.toUpperCase().includes("CONSUMABLE"));
+            (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+              comp.LeadHandComments.toUpperCase().includes("VMI")));
 
         let totalQty = 0;
 
@@ -1554,6 +1724,9 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         });
       });
 
+       finalData = await buildPicklistData(listData,tempFixture.Description,tempQuantity);
+      
+
       excelFixtureDetail = {
         description: tempFixture.Description,
         sopNum,
@@ -1564,7 +1737,7 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
       };
     }
 
-    return { excelFixtureDetail, listData };
+    return { excelFixtureDetail, listData:finalData };
   } catch (err) {
     console.log("error", err);
     return (listData = []);
