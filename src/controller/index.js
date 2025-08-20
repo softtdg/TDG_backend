@@ -646,7 +646,7 @@ async function addSOP(
   );
 
   // Column widths
-  [22.28, 69, 22.42, 27, 11.57, 13.28, 20.42, 21.57, 31.57].forEach(
+  [22.28, 69, 22.42, 27, 11.57, 14, 20.42, 21.57, 31.57].forEach(
     (w, i) => (worksheet.getColumn(i + 1).width = w)
   );
 
@@ -657,8 +657,8 @@ async function addSOP(
     "VENDOR",
     "VENDOR P/N",
     "PER FIX QTY.",
+    "ACTUAL QTY TO BE PICKED",
     "TOTAL QTY NEEDED",
-    "ACTUAL QTY PICKED",
     "LOCATION/ PURCHASING COMMENTS",
     "LEAD HAND COMMENTS",
   ];
@@ -733,7 +733,6 @@ async function addSOP(
       vertical: "middle",
     };
   }
-  worksheet.getColumn(9).width = 20;
 
   //   // Data rows
   //   components.forEach((comp, i) => {
@@ -968,8 +967,8 @@ async function addSOP(
       comp.Vendor,
       comp.VendorPN,
       comp.QuantityPerFixture,
-      totalQty,
       "",
+      totalQty,
       comp.Location,
       comp.LeadHandComments,
     ];
@@ -982,7 +981,7 @@ async function addSOP(
       cell.alignment = {
         wrapText: true,
         vertical: "middle",
-        ...(c <= 6 && c !== 2 ? { horizontal: "center" } : {}),
+        ...(c <= 8 && c !== 2 ? { horizontal: "center" } : {}),
       };
       cell.border = {
         top: { style: "thin" },
@@ -1097,7 +1096,7 @@ async function addSOP(
 
     // Highlight if quantity exceeds available and not consumable
     if (totalQty > available && !isConsumable) {
-      row.getCell(6).fill = {
+      row.getCell(7).fill = {
         type: "pattern",
         pattern: "lightTrellis",
         fgColor: { argb: "FFFF0000" }, // red color for over quantity
@@ -1681,11 +1680,11 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       22.42, // VENDOR
       27, // VENDOR P/N
       11.57, // PER FIX QTY.
-      13.28, // TOTAL QTY NEEDED
-      19, // ACTUAL QTY PICKED
+      14, // ACTUAL QTY TO BE PICKED
+      20.42, // TOTAL QTY NEEDED
       21.57, // UNIT OF MEASURE
       25, // LOCATION / PURCHASING COMMENTS (increased)
-      19, // LEAD HAND COMMENTS (also increased)
+      31.57, // LEAD HAND COMMENTS (also increased)
     ].forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
 
     // Row 7 headers
@@ -1695,8 +1694,8 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       "VENDOR",
       "VENDOR P/N",
       "PER FIX QTY.",
+      "ACTUAL QTY TO BE PICKED",
       "TOTAL QTY NEEDED",
-      "ACTUAL QTY PICKED",
       "UNIT OF MEASURE",
       "LOCATION/ PURCHASING COMMENTS",
       "LEAD HAND COMMENTS",
@@ -1828,8 +1827,8 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
         comp.Vendor,
         comp.VendorPN,
         comp.QuantityPerFixture,
-        totalQty,
         comp.ActualQtyPicked || "",
+        totalQty,
         comp.UnitOfMeasure,
         comp.Location,
         comp.LeadHandComments,
@@ -1858,7 +1857,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       const qty = totalQty;
       const available = comp.QuantityAvailable || 0;
       if (qty > available && !isConsumable) {
-        row.getCell(6).fill = {
+        row.getCell(7).fill = {
           type: "pattern",
           pattern: "lightTrellis",
           fgColor: { argb: "FFFF0000" },
