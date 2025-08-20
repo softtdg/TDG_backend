@@ -1,8 +1,8 @@
-const sql = require('mssql');
-const config = require('../config/config');
+const sql = require("mssql");
+const config = require("../config/config");
 
-sql.on('error', err => {
-  console.error('SQL global error:', err);
+sql.on("error", (err) => {
+  console.error("SQL global error:", err);
 });
 
 async function getDbPool(databaseName) {
@@ -30,7 +30,7 @@ async function getDbPool(databaseName) {
     const pool = await sql.connect(sqlConfig);
     return pool;
   } catch (err) {
-    console.error('Connection failed:', err);
+    console.error("Connection failed:", err);
     throw err;
   }
 }

@@ -2171,7 +2171,7 @@ exports.fixtureDetails = async (req, res) => {
       return res.badRequest({ message: "Fixture not found" });
     }
 
-    const openPickLists = await getOpenPickLists(fixtureNumber);
+    const openPickLists = await getOpenPickLists(fixedFixtureNumber);
 
     return res.ok({
       message: "Successfully fetched fixture details",
