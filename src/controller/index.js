@@ -656,8 +656,8 @@ async function addSOP(
     "VENDOR",
     "VENDOR P/N",
     "PER FIX QTY.",
-    "ACTUAL QTY TO BE PICKED",
     "TOTAL QTY NEEDED",
+    "ACTUAL QTY TO BE PICKED",
     "LOCATION/ PURCHASING COMMENTS",
     "LEAD HAND COMMENTS",
   ];
@@ -966,8 +966,8 @@ async function addSOP(
       comp.Vendor,
       comp.VendorPN,
       comp.QuantityPerFixture,
-      "",
       totalQty,
+      "",
       comp.Location,
       comp.LeadHandComments,
     ];
