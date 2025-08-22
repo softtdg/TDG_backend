@@ -2,28 +2,25 @@ const sql = require("mssql");
 const ExcelJS = require("exceljs");
 const path = require("path");
 const getDbPool = require("../db/mssqlPool");
-const connectDB = require("../db/conn");
+const { connectDB } = require("../db/conn");
 const axios = require("axios");
 const os = require("os");
 const fs = require("fs");
 const fsp = require("fs/promises");
 const config = require("../config/config");
+const { query } = require("../db/mssqlPool");
 
 exports.testing = async (req, res) => {
   try {
-    const pool = await getDbPool("Purchasing");
-    const result = await pool
-      .request()
-      .query(`SELECT * FROM [dbo].[PurchasingOrders]`);
-    res.json({ connected: true, result: result.recordset });
+    const result = await query("sop", "SELECT TOP 2 * FROM SOPs");
 
-    const db = await connectDB("BOMs");
-    const collection = db.collection("ExcelFixture");
+    const db = await connectDB();
+    const collection = db.collection("Fixture");
 
     // Demo: Get all documents
-    const data = await collection.find({}).limit(10).toArray();
+    const datas = await collection.find({}).limit(10).toArray();
 
-    res.json({ success: true, data });
+    res.json({ success: true, data: { result, datas } });
   } catch (err) {
     console.log("err", err);
     res.status(500).json({ connected: false, error: err.message });
@@ -32,9 +29,9 @@ exports.testing = async (req, res) => {
 
 const getMasterList = async () => {
   try {
-    const pool = await getDbPool("Design");
-
-    const result = await pool.request().query(`
+    const result = await query(
+      "design",
+      `
       SELECT 
         ML.MasterListEntryId,
         ML.TDGPN,
@@ -63,7 +60,8 @@ const getMasterList = async () => {
         ON G.GroupEntryId = ML.GroupingGroupEntryId
       LEFT JOIN [Design].[dbo].[UOMs] UOM 
         ON UOM.UOMEntryId = ML.UnitOfMeasureUOMEntryId
-    `);
+    `
+    );
 
     return result.recordset;
   } catch (error) {
@@ -73,9 +71,9 @@ const getMasterList = async () => {
 
 const getAllDieAndLabelList = async () => {
   try {
-    const pool = await getDbPool("Design");
-
-    const result = await pool.request().query(`
+    const result = await query(
+      "design",
+      `
       SELECT 
         ML.MasterListEntryId,
         ML.TDGPN,
@@ -105,9 +103,10 @@ const getAllDieAndLabelList = async () => {
       LEFT JOIN [Design].[dbo].[UOMs] UOM 
         ON UOM.UOMEntryId = ML.UnitOfMeasureUOMEntryId
       WHERE G.Name IN ('Die', 'Label');
-    `);
+    `
+    );
 
-    return result.recordset;
+    return result;
   } catch (error) {
     console.error("❌ Error fetching MasterList:", error);
   }
@@ -115,21 +114,21 @@ const getAllDieAndLabelList = async () => {
 
 const getLeadHandEntry = async (SOPLeadHandEntryId) => {
   try {
-    const pool = await getDbPool("SOP");
-
-    const result = await pool
-      .request()
-      .input("SOPLeadHandEntryId", sql.Int, SOPLeadHandEntryId).query(`
+    const result = await query(
+      "sop",
+      `
         SELECT TOP 1 *
         FROM [SOP].[dbo].[SOPLeadHandEntries]
         WHERE SOPLeadHandEntryId = @SOPLeadHandEntryId
-      `);
+      `,
+      { SOPLeadHandEntryId }
+    );
 
-    if (result.recordset.length === 0) {
+    if (result.length === 0) {
       return null;
     }
 
-    return result.recordset[0];
+    return result[0];
   } catch (error) {
     console.error("❌ Error fetching LeadHandEntry:", error);
     return null;
@@ -138,19 +137,21 @@ const getLeadHandEntry = async (SOPLeadHandEntryId) => {
 
 const getSOPIdtoSopData = async (SOPId) => {
   try {
-    const pool = await getDbPool("SOP");
-
-    const result = await pool.request().input("SOPId", sql.Int, SOPId).query(`
+    const result = await query(
+      "sop",
+      `
         SELECT TOP 1 *
         FROM [SOP].[dbo].[SOPs]
         WHERE SOPId = @SOPId
-      `);
+      `,
+      { SOPId }
+    );
 
-    if (result.recordset.length === 0) {
+    if (result.length === 0) {
       return null;
     }
 
-    return result.recordset[0];
+    return result[0];
   } catch (error) {
     console.error("❌ Error fetching SOPIdtoSopData:", error);
     return null;
@@ -159,21 +160,21 @@ const getSOPIdtoSopData = async (SOPId) => {
 
 const getProgramNameByProgramId = async (SOPProgramId) => {
   try {
-    const pool = await getDbPool("SOP");
-
-    const result = await pool
-      .request()
-      .input("SOPProgramId", sql.Int, SOPProgramId).query(`
+    const result = await query(
+      "sop",
+      `
         SELECT TOP 1 *
         FROM [SOP].[dbo].[SOPPrograms]
         WHERE SOPProgramId = @SOPProgramId
-      `);
+      `,
+      { SOPProgramId }
+    );
 
-    if (result.recordset.length === 0) {
+    if (result.length === 0) {
       return null;
     }
 
-    return result.recordset[0];
+    return result[0];
   } catch (error) {
     console.error("❌ Error fetching SOPIdtoSopData:", error);
     return null;
@@ -244,17 +245,17 @@ const getForceMakeBool = async (TDGPN) => {
   if (!TDGPN) return false;
 
   try {
-    const pool = await getDbPool("Purchasing");
-
-    const result = await pool
-      .request()
-      .input("TDGPN", sql.VarChar, TDGPN.toLowerCase()).query(`
+    const result = await query(
+      "purchasing",
+      `
         SELECT 1 
         FROM [Purchasing].[dbo].[MakePartNumbers]
         WHERE LOWER(TDGPN) = @TDGPN
-      `);
+      `,
+      { TDGPN: TDGPN.toLowerCase() }
+    );
 
-    return result.recordset.length > 0;
+    return result.length > 0;
   } catch (error) {
     console.error("❌ Error in getForceMakeBool:", error);
     return false;
@@ -265,17 +266,17 @@ const getForceBuyBool = async (TDGPN) => {
   if (!TDGPN) return false;
 
   try {
-    const pool = await getDbPool("Purchasing");
-
-    const result = await pool
-      .request()
-      .input("TDGPN", sql.VarChar, TDGPN.toLowerCase()).query(`
+    const result = await query(
+      "purchasing",
+      `
         SELECT 1
         FROM [Purchasing].[dbo].[BuyPartNumbers]
         WHERE LOWER(TDGPN) = @TDGPN
-      `);
+      `,
+      { TDGPN: TDGPN.toLowerCase() }
+    );
 
-    return result.recordset.length > 0;
+    return result.length > 0;
   } catch (error) {
     console.error("❌ Error in getForceBuyBool:", error);
     return false;
@@ -510,19 +511,20 @@ const GetInventoryTuple = async (TDGPN, INTL = false) => {
 
 const getUsersInRole = async (roleName) => {
   try {
-    const pool = await getDbPool("OVERVIEW");
-
-    const result = await pool
-      .request()
-      .input("roleName", sql.NVarChar, roleName).query(`
+    const sqlQuery = `
       SELECT u.*
-    FROM [OVERVIEW].[dbo].[AspNetUsers] AS u
-    INNER JOIN [OVERVIEW].[dbo].[AspNetUserRoles] AS ur ON u.Id = ur.UserId
-    INNER JOIN [OVERVIEW].[dbo].[AspNetRoles] AS r ON ur.RoleId = r.Id
-    WHERE r.[Name] = @roleName
-    `);
+      FROM [OVERVIEW].[dbo].[AspNetUsers] AS u
+      INNER JOIN [OVERVIEW].[dbo].[AspNetUserRoles] AS ur ON u.Id = ur.UserId
+      INNER JOIN [OVERVIEW].[dbo].[AspNetRoles] AS r ON ur.RoleId = r.Id
+      WHERE r.[Name] = @roleName
+    `;
 
-    return result.recordset;
+    // params object matches input names in the query
+    const params = { roleName };
+
+    const users = await query("overview", sqlQuery, params);
+
+    return users;
   } catch (error) {
     console.error("❌ Error in getUsersInRole:", error);
     return false;
@@ -531,15 +533,16 @@ const getUsersInRole = async (roleName) => {
 
 const getUserByUsername = async (username) => {
   try {
-    const pool = await getDbPool("OVERVIEW");
-    const result = await pool
-      .request()
-      .input("username", sql.NVarChar, username).query(`
+    const sqlQuery = `
         SELECT * FROM [OVERVIEW].[dbo].[AspNetUsers]
         WHERE [UserName] = @username
-      `);
+    `;
 
-    return result.recordset[0] || null; // return user or null if not found
+    const params = { username };
+
+    const user = await query("overview", sqlQuery, params);
+
+    return user[0] || null; // return user or null if not found
   } catch (err) {
     console.error("Error fetching user by username:", err);
     throw err;
@@ -565,7 +568,6 @@ function getCellText(cell) {
   // Hyperlink or formula
   if (cell.value.text) return cell.value.text;
   if (cell.value.result) return cell.value.result.toString();
-
 
   return cell.value.toString();
 }
@@ -1299,7 +1301,7 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
         };
       }
 
-      const db = await connectDB("BOMs");
+      const db = await connectDB();
       const tempFixture = await getExplodedBOM(fixture, db);
       const refFixture = await getStoredFixture(fixture, db);
 
@@ -1410,14 +1412,17 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
   // STEP 1: Build partInfo (TDGPN → { vendor, hasChildren })
   const partInfo = new Map();
 
-  components.forEach(comp => {
+  components.forEach((comp) => {
     const tdgpn = (comp.TDGPN || "").toUpperCase();
     const desc = (comp.Description || "").toUpperCase();
 
     if (!tdgpn) return;
 
     if (!partInfo.has(tdgpn)) {
-      partInfo.set(tdgpn, { vendor: (comp.Vendor || "").toUpperCase(), hasChildren: false });
+      partInfo.set(tdgpn, {
+        vendor: (comp.Vendor || "").toUpperCase(),
+        hasChildren: false,
+      });
     }
 
     // If this row is a child ("GOES INTO ..."), mark parent
@@ -1438,7 +1443,7 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
   const parentToChildrenMap = new Map();
   const tdgpnMap = new Map(); // TDGPN → { vendor, comp }
 
-  components.forEach(comp => {
+  components.forEach((comp) => {
     const tdgpn = (comp.TDGPN || "").toUpperCase();
     const desc = (comp.Description || "").toUpperCase();
     const location = (comp.Location || "").trim();
@@ -1458,14 +1463,14 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
 
       parentToChildrenMap.get(parent).push({
         tdgpn,
-        hasLocation: location !== ""
+        hasLocation: location !== "",
       });
     }
   });
 
   // --------------------------------------------------------------------------------
   // STEP 3: Build listData with flags
-  components.forEach(comp => {
+  components.forEach((comp) => {
     const tdgpn = (comp.TDGPN || "").toUpperCase();
     const desc = (comp.Description || "").toUpperCase();
     const vendor = (comp.Vendor || "").toUpperCase();
@@ -1476,13 +1481,13 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
 
     // Consumable detection
     const isConsumable =
-          comp.ConsumableOrVMI ||
-          (comp.Location &&
-            (comp.Location.toUpperCase().includes("CONSUMABLE") ||
-              comp.Location.toUpperCase().includes("VMI"))) ||
-          (comp.LeadHandComments &&
-            (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
-              comp.LeadHandComments.toUpperCase().includes("VMI")));
+      comp.ConsumableOrVMI ||
+      (comp.Location &&
+        (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+          comp.Location.toUpperCase().includes("VMI"))) ||
+      (comp.LeadHandComments &&
+        (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+          comp.LeadHandComments.toUpperCase().includes("VMI")));
 
     const isWire = desc.includes("WIRE");
 
@@ -1510,19 +1515,23 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
       const parentVendor = parentInfo.vendor || "";
 
       // GOES INTO row: gray if parent vendor is NOT TDG or FASTENAL
-      isGray = !(parentVendor.includes("TDG") || parentVendor.includes("FASTENAL"));
+      isGray = !(
+        parentVendor.includes("TDG") || parentVendor.includes("FASTENAL")
+      );
     } else {
       const info = partInfo.get(tdgpn) || { vendor: "", hasChildren: false };
       const { vendor: mainVendor, hasChildren } = info;
 
       // Main row: gray only if vendor is TDG or FASTENAL AND has children
-      isGray = (mainVendor.includes("TDG") || mainVendor.includes("FASTENAL")) && hasChildren;
+      isGray =
+        (mainVendor.includes("TDG") || mainVendor.includes("FASTENAL")) &&
+        hasChildren;
     }
 
     // B. New rule: gray parent with no vendor, has children, and all children have location
     if (parentToChildrenMap.has(tdgpn)) {
       const children = parentToChildrenMap.get(tdgpn);
-      const allChildrenHaveLocation = children.every(c => c.hasLocation);
+      const allChildrenHaveLocation = children.every((c) => c.hasLocation);
       if (!vendor && allChildrenHaveLocation && children.length > 0) {
         isGray = true;
       }
@@ -1565,7 +1574,7 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
       QuantityAvailable: comp.QuantityAvailable,
       ConsumableOrVMI: comp.ConsumableOrVMI,
       isGray,
-      isLightTrellis
+      isLightTrellis,
     });
   });
 
@@ -1619,7 +1628,7 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         };
       }
 
-      const db = await connectDB("BOMs");
+      const db = await connectDB();
       const tempFixture = await getExplodedBOM(fixture, db);
       const refFixture = await getStoredFixture(fixture, db);
 
@@ -1724,8 +1733,11 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         });
       });
 
-       finalData = await buildPicklistData(listData,tempFixture.Description,tempQuantity);
-      
+      finalData = await buildPicklistData(
+        listData,
+        tempFixture.Description,
+        tempQuantity
+      );
 
       excelFixtureDetail = {
         description: tempFixture.Description,
@@ -1737,7 +1749,7 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
       };
     }
 
-    return { excelFixtureDetail, listData:finalData };
+    return { excelFixtureDetail, listData: finalData };
   } catch (err) {
     console.log("error", err);
     return (listData = []);
@@ -1748,23 +1760,21 @@ const getOpenPickLists = async (fixtureNumber) => {
   try {
     let fixtureLists = [];
 
-    const pool = await getDbPool("SOP");
+    const sqlQuery = `
+      SELECT *
+      FROM [SOP].[dbo].[SOPLeadHandEntries]
+      WHERE FixtureNumber = @FixtureNumber
+    `;
+    const params = { FixtureNumber: fixtureNumber };
+    const retriveAllFixturesResult = await query("sop", sqlQuery, params);
 
-    const retriveAllFixturesResult = await pool
-      .request()
-      .input("FixtureNumber", sql.NVarChar, fixtureNumber).query(`
-        SELECT *
-        FROM [SOP].[dbo].[SOPLeadHandEntries]
-        WHERE FixtureNumber = @FixtureNumber
-      `);
-
-    if (retriveAllFixturesResult.recordset.length === 0) {
+    if (retriveAllFixturesResult.length === 0) {
       return fixtureLists;
     }
 
-    const result = await pool
-      .request()
-      .input("fixture", sql.VarChar, fixtureNumber.toUpperCase()).query(`
+    const result = await query(
+      "sop",
+      `
     SELECT 
         sle.*, 
         s.FinalDeliveryDate,
@@ -1786,9 +1796,11 @@ const getOpenPickLists = async (fixtureNumber) => {
         she.ShippingDateIn = '0001-01-01' AND
         s.FinalDeliveryDate = '0001-01-01'
     ORDER BY s.ODD;
-  `);
+  `,
+      { fixture: fixtureNumber.toUpperCase() }
+    );
 
-    return result.recordset;
+    return result;
   } catch (err) {
     console.log("error:", err);
     return [];
@@ -2455,147 +2467,162 @@ exports.SOPSerchService = async (req, res) => {
 
     const { SOPNumber } = req.query;
 
-    const pool = await getDbPool("SOP");
+    const sqlQuery = `
+      SELECT *
+      FROM [SOP].[dbo].[SOPs]
+      WHERE SOPNum = @SOPNumber
+    `;
 
-    let sopNumberResult = await pool
-      .request()
-      .input("SOPNumber", sql.NVarChar, SOPNumber).query(`
-        SELECT *
-        FROM [SOP].[dbo].[SOPs]
-        WHERE SOPNum = @SOPNumber
-      `);
+    const params = { SOPNumber };
 
-    if (sopNumberResult.recordset.length === 0) {
+    let sopNumberResult = await query("sop", sqlQuery, params);
+
+    if (sopNumberResult.length === 0) {
       return res.badRequest({ message: "SOP not found" });
     }
 
-    sopNumberResult = sopNumberResult.recordset[0];
+    sopNumberResult = sopNumberResult[0];
 
-    const LeadHandEntryResult = await pool
-      .request()
-      .input("SOPId", sql.Int, sopNumberResult.SOPId).query(`
+    const LeadHandEntryResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPLeadHandEntries]
         WHERE SOPId = @SOPId
-      `);
+      `,
+      { SOPId: sopNumberResult.SOPId }
+    );
 
-    const LeadHandEntryResults = LeadHandEntryResult.recordset;
+    const LeadHandEntryResults = LeadHandEntryResult;
     let backorderEntryResult = [];
 
     if (LeadHandEntryResults.length) {
       backorderEntryResult = await Promise.all(
         LeadHandEntryResults.map(async (e) => {
-          const backorderResults = await pool
-            .request()
-            .input("SOPLeadHandEntryId", sql.Int, e.SOPLeadHandEntryId).query(`
+          const backorderResults = await query(
+            "sop",
+            `
             SELECT *
             FROM [SOP].[dbo].[SOPBackorderEntries]
             WHERE SOPLeadHandEntryId = @SOPLeadHandEntryId
-          `);
-          return { ...e, backorderEntry: backorderResults.recordset || [] };
+          `,
+            { SOPLeadHandEntryId: e.SOPLeadHandEntryId }
+          );
+          return { ...e, backorderEntry: backorderResults || [] };
         })
       );
     }
 
-    const customerResult = await pool
-      .request()
-      .input("SOPCustomerId", sql.Int, sopNumberResult.SOPCustomerId).query(`
+    const customerResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPCustomers]
         WHERE SOPCustomerId = @SOPCustomerId
-      `);
+      `,
+      { SOPCustomerId: sopNumberResult.SOPCustomerId }
+    );
 
-    const programResult = await pool
-      .request()
-      .input("SOPProgramId", sql.Int, sopNumberResult.SOPProgramId).query(`
+    const programResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPPrograms]
         WHERE SOPProgramId = @SOPProgramId
-      `);
+      `,
+      { SOPProgramId: sopNumberResult.SOPProgramId }
+    );
 
-    const locationResult = await pool
-      .request()
-      .input("SOPLocationId", sql.Int, sopNumberResult.SOPLocationId).query(`
+    const locationResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPLocations]
         WHERE SOPLocationId = @SOPLocationId
-      `);
+      `,
+      { SOPLocationId: sopNumberResult.SOPLocationId }
+    );
 
-    const sopProductionManagerResult = await pool
-      .request()
-      .input(
-        "SOPProductionManagerId",
-        sql.Int,
-        sopNumberResult.SOPProductionManagerId
-      ).query(`
+    const sopProductionManagerResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPProductionManagers]
         WHERE SOPProductionManagerId = @SOPProductionManagerId
-      `);
+      `,
+      { SOPProductionManagerId: sopNumberResult.SOPProductionManagerId }
+    );
 
-    const productionEntryResult = await pool
-      .request()
-      .input(
-        "SOPProductionEntryId",
-        sql.Int,
-        sopNumberResult.SOPProductionEntryId
-      ).query(`
+    const productionEntryResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPProductionEntries] 
         WHERE SOPProductionEntryId = @SOPProductionEntryId
-      `);
+      `,
+      { SOPProductionEntryId: sopNumberResult.SOPProductionEntryId }
+    );
 
-    const sopLeadHandId = productionEntryResult.recordset[0].SOPLeadHandId;
+    const sopLeadHandId = productionEntryResult[0].SOPLeadHandId;
 
-    const leadHandResult = await pool
-      .request()
-      .input("SOPLeadHandId", sql.Int, sopLeadHandId).query(`
+    const leadHandResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPLeadHands] 
         WHERE SOPLeadHandId = @SOPLeadHandId
-      `);
+      `,
+      { SOPLeadHandId: sopLeadHandId }
+    );
 
-    const qaEntryResult = await pool
-      .request()
-      .input("SOPQAEntryId", sql.Int, sopNumberResult.SOPQAEntryId).query(`
+    const qaEntryResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPQAEntries]
         WHERE SOPQAEntryId = @SOPQAEntryId
-      `);
+      `,
+      { SOPQAEntryId: sopNumberResult.SOPQAEntryId }
+    );
 
-    const shippingEntryResult = await pool
-      .request()
-      .input("SOPShippingEntryId", sql.Int, sopNumberResult.SOPShippingEntryId)
-      .query(`
+    const shippingEntryResult = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPShippingEntries]
         WHERE SOPShippingEntryId = @SOPShippingEntryId
-      `);
+      `,
+      { SOPShippingEntryId: sopNumberResult.SOPShippingEntryId }
+    );
 
-    const fixtureResults = await pool
-      .request()
-      .input("SOPId", sql.Int, sopNumberResult.SOPId).query(`
+    const fixtureResults = await query(
+      "sop",
+      `
         SELECT *
         FROM [SOP].[dbo].[SOPLeadHandEntries]
         WHERE SOPId = @SOPId
-      `);
+      `,
+      { SOPId: sopNumberResult.SOPId }
+    );
 
-    const db = await connectDB("BOMs");
+    const db = await connectDB();
     const collection = db.collection("Fixture");
 
     // Process all fixtures
     const fixturesDetailed = await Promise.all(
-      fixtureResults.recordset.map(async (fixture) => {
+      fixtureResults.map(async (fixture) => {
         // Get assembler for this fixture
-        let assemblerIdResult = { recordset: [] };
+        let assemblerIdResult = [];
         if (fixture.SOPAssemblerId) {
-          assemblerIdResult = await pool
-            .request()
-            .input("SOPAssemblerId", sql.Int, fixture.SOPAssemblerId).query(`
+          assemblerIdResult = await query(
+            "sop",
+            `
               SELECT *
               FROM [SOP].[dbo].[SOPAssemblers]
               WHERE SOPAssemblerId = @SOPAssemblerId
-            `);
+            `,
+            { SOPAssemblerId: fixture.SOPAssemblerId }
+          );
         }
 
         const fixtureName = fixFixtureName(fixture.FixtureNumber);
@@ -2608,7 +2635,7 @@ exports.SOPSerchService = async (req, res) => {
 
         return {
           ...fixture,
-          assembler: assemblerIdResult.recordset,
+          assembler: assemblerIdResult,
           fixtureMongoData,
         };
       })
@@ -2616,15 +2643,15 @@ exports.SOPSerchService = async (req, res) => {
 
     const responseData = {
       ...sopNumberResult,
-      customer: customerResult.recordset,
-      program: programResult.recordset,
-      location: locationResult.recordset,
-      sopProductionManager: sopProductionManagerResult.recordset,
-      productionEntry: productionEntryResult.recordset,
+      customer: customerResult,
+      program: programResult,
+      location: locationResult,
+      sopProductionManager: sopProductionManagerResult,
+      productionEntry: productionEntryResult,
       leadHandEntry: backorderEntryResult, // leadhand entry and backorder entry both in one array
-      leadHand: leadHandResult.recordset,
-      qaEntry: qaEntryResult.recordset,
-      shippingEntry: shippingEntryResult.recordset,
+      leadHand: leadHandResult,
+      qaEntry: qaEntryResult,
+      shippingEntry: shippingEntryResult,
       fixtures: fixturesDetailed, // <-- now an array of detailed fixture info
     };
 
@@ -2644,7 +2671,7 @@ exports.fixtureDetails = async (req, res) => {
 
     const fixedFixtureNumber = fixFixtureName(fixtureNumber);
 
-    const db = await connectDB("BOMs");
+    const db = await connectDB();
     const collection = db.collection("Fixture");
     // Get MongoDB data for this fixture
     const fixtureMongoData = await collection
