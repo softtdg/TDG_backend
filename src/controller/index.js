@@ -566,7 +566,6 @@ function getCellText(cell) {
   if (cell.value.text) return cell.value.text;
   if (cell.value.result) return cell.value.result.toString();
 
-
   return cell.value.toString();
 }
 
@@ -1410,14 +1409,17 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
   // STEP 1: Build partInfo (TDGPN → { vendor, hasChildren })
   const partInfo = new Map();
 
-  components.forEach(comp => {
+  components.forEach((comp) => {
     const tdgpn = (comp.TDGPN || "").toUpperCase();
     const desc = (comp.Description || "").toUpperCase();
 
     if (!tdgpn) return;
 
     if (!partInfo.has(tdgpn)) {
-      partInfo.set(tdgpn, { vendor: (comp.Vendor || "").toUpperCase(), hasChildren: false });
+      partInfo.set(tdgpn, {
+        vendor: (comp.Vendor || "").toUpperCase(),
+        hasChildren: false,
+      });
     }
 
     // If this row is a child ("GOES INTO ..."), mark parent
@@ -1438,7 +1440,7 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
   const parentToChildrenMap = new Map();
   const tdgpnMap = new Map(); // TDGPN → { vendor, comp }
 
-  components.forEach(comp => {
+  components.forEach((comp) => {
     const tdgpn = (comp.TDGPN || "").toUpperCase();
     const desc = (comp.Description || "").toUpperCase();
     const location = (comp.Location || "").trim();
@@ -1458,14 +1460,14 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
 
       parentToChildrenMap.get(parent).push({
         tdgpn,
-        hasLocation: location !== ""
+        hasLocation: location !== "",
       });
     }
   });
 
   // --------------------------------------------------------------------------------
   // STEP 3: Build listData with flags
-  components.forEach(comp => {
+  components.forEach((comp) => {
     const tdgpn = (comp.TDGPN || "").toUpperCase();
     const desc = (comp.Description || "").toUpperCase();
     const vendor = (comp.Vendor || "").toUpperCase();
@@ -1476,13 +1478,13 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
 
     // Consumable detection
     const isConsumable =
-          comp.ConsumableOrVMI ||
-          (comp.Location &&
-            (comp.Location.toUpperCase().includes("CONSUMABLE") ||
-              comp.Location.toUpperCase().includes("VMI"))) ||
-          (comp.LeadHandComments &&
-            (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
-              comp.LeadHandComments.toUpperCase().includes("VMI")));
+      comp.ConsumableOrVMI ||
+      (comp.Location &&
+        (comp.Location.toUpperCase().includes("CONSUMABLE") ||
+          comp.Location.toUpperCase().includes("VMI"))) ||
+      (comp.LeadHandComments &&
+        (comp.LeadHandComments.toUpperCase().includes("CONSUMABLE") ||
+          comp.LeadHandComments.toUpperCase().includes("VMI")));
 
     const isWire = desc.includes("WIRE");
 
@@ -1510,19 +1512,23 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
       const parentVendor = parentInfo.vendor || "";
 
       // GOES INTO row: gray if parent vendor is NOT TDG or FASTENAL
-      isGray = !(parentVendor.includes("TDG") || parentVendor.includes("FASTENAL"));
+      isGray = !(
+        parentVendor.includes("TDG") || parentVendor.includes("FASTENAL")
+      );
     } else {
       const info = partInfo.get(tdgpn) || { vendor: "", hasChildren: false };
       const { vendor: mainVendor, hasChildren } = info;
 
       // Main row: gray only if vendor is TDG or FASTENAL AND has children
-      isGray = (mainVendor.includes("TDG") || mainVendor.includes("FASTENAL")) && hasChildren;
+      isGray =
+        (mainVendor.includes("TDG") || mainVendor.includes("FASTENAL")) &&
+        hasChildren;
     }
 
     // B. New rule: gray parent with no vendor, has children, and all children have location
     if (parentToChildrenMap.has(tdgpn)) {
       const children = parentToChildrenMap.get(tdgpn);
-      const allChildrenHaveLocation = children.every(c => c.hasLocation);
+      const allChildrenHaveLocation = children.every((c) => c.hasLocation);
       if (!vendor && allChildrenHaveLocation && children.length > 0) {
         isGray = true;
       }
@@ -1565,7 +1571,7 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
       QuantityAvailable: comp.QuantityAvailable,
       ConsumableOrVMI: comp.ConsumableOrVMI,
       isGray,
-      isLightTrellis
+      isLightTrellis,
     });
   });
 
@@ -1724,8 +1730,11 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         });
       });
 
-       finalData = await buildPicklistData(listData,tempFixture.Description,tempQuantity);
-      
+      finalData = await buildPicklistData(
+        listData,
+        tempFixture.Description,
+        tempQuantity
+      );
 
       excelFixtureDetail = {
         description: tempFixture.Description,
@@ -1737,7 +1746,7 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
       };
     }
 
-    return { excelFixtureDetail, listData:finalData };
+    return { excelFixtureDetail, listData: finalData };
   } catch (err) {
     console.log("error", err);
     return (listData = []);
