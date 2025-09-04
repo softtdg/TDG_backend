@@ -20,50 +20,51 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(bodyParser.json({ limit: '5mb' }));
-app.use(express.urlencoded({
+app.use(
+  express.urlencoded({
     limit: '100mb',
-    extended: true
-}));
-
+    extended: true,
+  }),
+);
 
 app.use(function (req, res, next) {
-    const origin = req.headers.origin ? req.headers.origin : '*';
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader(
-      'Access-Control-Allow-Methods',
-      'GET, POST, OPTIONS, PUT, PATCH, DELETE',
-    );
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Authorization, Authentication, Content-Type, origin,action, accept, token,withCredentials',
-    );
-    res.setHeader('Access-Control-Expose-Headers', 'security_token');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Cache-Control', 'no-store,max-age=0');
-    next();
-  });
-  
+  const origin = req.headers.origin ? req.headers.origin : '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, OPTIONS, PUT, PATCH, DELETE',
+  );
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Authorization, Authentication, Content-Type, origin,action, accept, token,withCredentials',
+  );
+  res.setHeader('Access-Control-Expose-Headers', 'security_token');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Cache-Control', 'no-store,max-age=0');
+  next();
+});
+
 app.use(config.prefix, routes);
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'download.html'));
 });
-  
-app.use((error, req, res, next) => {
-    if (error instanceof SyntaxError) {
-      let logData = { error: error };
-      logFunction.createLogDb(config.TABLE_ERROR_LOG, {
-        store_client_id: 0,
-        type: 'Invalid_JSON',
-        log: JSON.stringify(logData),
-        tech_type: 1,
-      });
-      return badRequest({ message: 'Invalid Json Formate...!' }, res);
-    }
-    next();
-  });
 
-  const server = http.createServer(app);
-  server.listen(config.PORT, () => {
-    console.log(`Server Running At Port : ${config.PORT}`);
-  });
+app.use((error, req, res, next) => {
+  if (error instanceof SyntaxError) {
+    let logData = { error: error };
+    logFunction.createLogDb(config.TABLE_ERROR_LOG, {
+      store_client_id: 0,
+      type: 'Invalid_JSON',
+      log: JSON.stringify(logData),
+      tech_type: 1,
+    });
+    return badRequest({ message: 'Invalid Json Formate...!' }, res);
+  }
+  next();
+});
+
+const server = http.createServer(app);
+server.listen(config.PORT, () => {
+  console.log(`Server Running At Port : ${config.PORT}`);
+});
