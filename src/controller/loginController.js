@@ -10,7 +10,7 @@ const findByUsername = async (username) => {
 
     const result = await request.query(`
         SELECT *
-       FROM [dbo].[AspNetUsers] 
+       FROM  [OVERVIEW].[dbo].[AspNetUsers] 
         WHERE UserName = @username
       `);
 
@@ -74,8 +74,8 @@ const getUserRoles = async (userId) => {
 
     const result = await request.query(`
         SELECT r.Name as RoleName
-        FROM AspNetUserRoles ur
-        INNER JOIN AspNetRoles r ON ur.RoleId = r.Id
+        FROM [OVERVIEW].[dbo].[AspNetUserRoles] ur
+        INNER JOIN [OVERVIEW].[dbo].[AspNetRoles] r ON ur.RoleId = r.Id
         WHERE ur.UserId = @userId
       `);
 
@@ -99,7 +99,6 @@ exports.login = async (req, res) => {
 
     // Fetch user data from database
     const user = await findByUsername(UserName);
-    console.log('user:-- ', user);
     if (!user) {
       return res.badRequest({
         message: 'Username/password not found',
