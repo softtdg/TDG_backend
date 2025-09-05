@@ -99,6 +99,7 @@ exports.login = async (req, res) => {
 
     // Fetch user data from database
     const user = await findByUsername(UserName);
+    console.log('user:-- ', user);
     if (!user) {
       return res.badRequest({
         message: 'Username/password not found',
@@ -134,7 +135,7 @@ exports.login = async (req, res) => {
   } catch (error) {
     console.error('Login POST error:', error);
     return res.failureResponse({
-      message: 'Server error occurred',
+      message: error.message,
       error: error,
     });
   }
