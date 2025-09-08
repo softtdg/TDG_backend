@@ -49,32 +49,79 @@
       async function downloadPickList() {
         try {
           const response = await fetch(
-            "http://localhost:4000/api/downloadPickList?fixture=190-100-2322&user=om",
+            'http://localhost:4000/api/sopSearch/downloadupdatedDataSheets',
             // "http://localhost:3000/api/downloadPickList?lhrEntryId=14137&user=om",
             {
-              method: "GET",
+              method: 'POST',
               headers: {
-                "Content-Type": "application/json",
+                'Content-Type': 'application/json',
               },
-            }
+              body: JSON.stringify({
+                excelFixtureDetail: {
+                  description: 'MOOD LIGHT',
+                  sopNum: '-',
+                  programName: '',
+                  fixture: '190-100-1889',
+                  tempQuantity: 1,
+                  odd: '0001-01-01T00:00:00.000Z',
+                },
+                sheetData: [
+                  {
+                    TDGPN: 'CM00258-002',
+                    Description: 'MOOD LIGHT MOUNTING PLATE ASSY',
+                    Vendor: '',
+                    VendorPN: '',
+                    QuantityPerFixture: 1,
+                    TotalQtyNeeded: 1,
+                    ActualQtyPicked: '50',
+                    Location: '31-B-2 (6)',
+                    LeadHandComments: '',
+                    UnitOfMeasure: 'PCS',
+                    QuantityAvailable: 6,
+                    ConsumableOrVMI: false,
+                    isGray: false,
+                    isLightTrellis: false,
+                    InventoryComments: 'noneed more',
+                  },
+                  {
+                    TDGPN: '500-800-8004',
+                    Description:
+                      'VT2 LONGER MOOD LIGHT FIXTURE COMBO ASSEMBLY CONSISTS OF (500-500-5534 AND 500-500-5535) ',
+                    Vendor: 'TDG-SMT',
+                    VendorPN: '500-800-8004',
+                    QuantityPerFixture: 1,
+                    TotalQtyNeeded: 1,
+                    ActualQtyPicked: '20',
+                    Location: 'HV21-C (17)',
+                    LeadHandComments: '',
+                    UnitOfMeasure: 'PCS',
+                    QuantityAvailable: 17,
+                    ConsumableOrVMI: false,
+                    isGray: false,
+                    isLightTrellis: false,
+                    InventoryComments: 'i have already',
+                  },
+                ],
+              }),
+            },
           );
 
-          if (!response.ok) throw new Error("Failed to generate file");
+          if (!response.ok) throw new Error('Failed to generate file');
 
-          console.log("response", response);
+          console.log('response', response);
           const blob = await response.blob();
           const filename =
             getFileNameFromHeader(
-              response.headers.get("Content-Disposition")
-            ) || "PickList.xlsx";
+              response.headers.get('Content-Disposition'),
+            ) || 'PickList.xlsx';
 
-          const link = document.createElement("a");
+          const link = document.createElement('a');
           link.href = window.URL.createObjectURL(blob);
           link.download = filename;
           link.click();
         } catch (err) {
-          console.error("Download error:", err);
-          alert("Failed to download the pick list.");
+          console.error('Download error:', err);
+          alert('Failed to download the pick list.');
         }
       }
 

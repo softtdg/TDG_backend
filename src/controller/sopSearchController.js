@@ -1817,6 +1817,7 @@ const getOpenPickLists = async (fixtureNumber) => {
 
 const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
   try {
+    const qtyToBePickedList = [];
     const workbookCreate = new ExcelJS.Workbook();
 
     // Validate and sanitize worksheet name
@@ -1955,6 +1956,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       21.57, // UNIT OF MEASURE
       25, // LOCATION / PURCHASING COMMENTS (increased)
       31.57, // LEAD HAND COMMENTS (also increased)
+      31.57, // INVENTORY COMMENTS (also increased)
     ].forEach((w, i) => (worksheet.getColumn(i + 1).width = w));
 
     // Row 7 headers
@@ -1969,6 +1971,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       'UNIT OF MEASURE',
       'LOCATION/ PURCHASING COMMENTS',
       'LEAD HAND COMMENTS',
+      'INVENTORY COMMENTS',
     ];
     worksheet.getRow(7).values = headers;
     worksheet.getRow(7).height = undefined;
@@ -2001,7 +2004,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
 
     // Apply bold borders to second table (starting from Row 7)
     for (let row = 7; row <= worksheet.rowCount; row++) {
-      for (let col = 1; col <= 10; col++) {
+      for (let col = 1; col <= 11; col++) {
         const cell = worksheet.getRow(row).getCell(col);
         cell.border = {
           top: { style: 'thin' },
@@ -2105,10 +2108,22 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
         comp.UnitOfMeasure,
         comp.Location,
         comp.LeadHandComments,
+        comp.InventoryComments,
       ];
 
+      if (comp.ActualQtyPicked) {
+        qtyToBePickedList.push({
+          partNo: comp.TDGPN,
+          fixtureNumber: excelFixtureDetail.fixture,
+          UOM: comp.UnitOfMeasure,
+          totalQtyNeeded: comp.TotalQtyNeeded,
+          actualQtyToBePicked: parseInt(comp.ActualQtyPicked),
+          comments: comp.InventoryComments || '',
+        });
+      }
+
       // create table border for description.....
-      for (let c = 1; c <= 10; c++) {
+      for (let c = 1; c <= 11; c++) {
         const cell = row.getCell(c);
         // Apply normal font for B, C, D; bold for others
         const isNormalFont = c === 2 || c === 3 || c === 4;
@@ -2227,7 +2242,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       }
 
       // Apply gray fill (vendor-based coloring)
-      for (let c = 1; c <= 9; c++) {
+      for (let c = 1; c <= 11; c++) {
         row.getCell(c).fill = shouldGray
           ? {
               type: 'pattern',
@@ -2390,7 +2405,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
 
     // last row set gray color
     const finalRow = worksheet.getRow(sheetlistData.length + 8);
-    for (let c = 1; c <= 10; c++) {
+    for (let c = 1; c <= 11; c++) {
       finalRow.getCell(c).fill = {
         type: 'pattern',
         pattern: 'solid',
@@ -2406,7 +2421,7 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
     };
     worksheet.getCell('C3').font = { size: 18 };
     ['A', 'B'].forEach((col) =>
-      [1, 2, 3, 4, 5].forEach(
+      [1, 2, 3, 4, 5, 6].forEach(
         (row) =>
           (worksheet.getCell(`${col}${row}`).alignment = {
             horizontal: col === 'A' ? 'left' : 'right',
@@ -2414,14 +2429,14 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
       ),
     );
     ['G', 'H'].forEach((col) =>
-      [1, 2, 3, 4, 5].forEach(
+      [1, 2, 3, 4, 5, 6].forEach(
         (row) =>
           (worksheet.getCell(`${col}${row}`).alignment = {
             horizontal: 'center',
           }),
       ),
     );
-    ['C1', 'C2', 'C3', 'C4', 'C5'].forEach(
+    ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'].forEach(
       (cell) =>
         (worksheet.getCell(cell).alignment = {
           horizontal: 'center',
@@ -2462,6 +2477,37 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
 
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.send(buffer);
+
+    // Helper function to escape single quotes in SQL strings
+    function escapeSqlString(str) {
+      if (!str) return '';
+      return str.replace(/'/g, "''");
+    }
+
+    if (qtyToBePickedList.length) {
+      // Create SQL values string from qtyToBePickedList
+      const valuesString = qtyToBePickedList
+        .map(
+          (item) => `(
+        '${escapeSqlString(item.partNo)}',
+        '${escapeSqlString(item.fixtureNumber)}',
+        '${escapeSqlString(item.UOM)}',
+        ${item.totalQtyNeeded},
+        ${item.actualQtyToBePicked},
+        '${escapeSqlString(item.comments)}'
+      )`,
+        )
+        .join(', ');
+
+      const query = `
+        INSERT INTO InventoryUsage (partNo, fixtureNumber, UOM, totalQtyNeeded, actualQtyToBePicked, comments)
+        VALUES ${valuesString};
+      `;
+
+      const pool = await getDbPool('TDG');
+      const result = await pool.request().query(query);
+      console.log('Inserted successfully:', result.rowsAffected);
+    }
   } catch (error) {
     console.log('error', error);
     res.failureResponse({ message: error.message });
@@ -2470,11 +2516,48 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
 
 exports.SOPSerchService = async (req, res) => {
   try {
-    if (!req.query.SOPNumber) {
-      return res.badRequest({ message: 'SOP ID is required' });
+    if (!req.query.SOPNumber && !req.query.partNo) {
+      return res.badRequest({
+        message: 'SOP Number or Part Number is required',
+      });
     }
 
-    const { SOPNumber } = req.query;
+    if (req.query.SOPNumber && req.query.partNo) {
+      return res.badRequest({
+        message: 'SOP Number or Part Number any one is required',
+      });
+    }
+
+    const { SOPNumber, partNo } = req.query;
+
+    if (partNo) {
+      const pool = await getDbPool('TDG');
+      const result = await pool.request().input('partNo', sql.NVarChar, partNo)
+        .query(`
+          SELECT * FROM [dbo].[InventoryUsage] WHERE partNo = @partNo
+        `);
+
+      if (!result.recordset.length) {
+        return res.badRequest({ message: 'Part not found' });
+      }
+
+      const totalQtyUsed = await pool
+        .request()
+        .input('partNo', sql.NVarChar, partNo).query(`
+        SELECT partNo, SUM(actualQtyToBePicked) AS totalActualQtyPicked FROM [TDG].[dbo].[InventoryUsage] WHERE 
+          partNo = @partNo
+        GROUP BY 
+          partNo;
+      `);
+
+      return res.ok({
+        message: 'Successfully fetched part data',
+        data: {
+          totalQtyUsed: totalQtyUsed.recordset?.[0]?.totalActualQtyPicked || 0,
+          partData: result.recordset,
+        },
+      });
+    }
 
     const pool = await getDbPool('SOP');
 
