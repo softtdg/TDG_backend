@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { query } = require('../db/mssqlPool');
+const { generateToken } = require('../utils/common');
 
 const findByUsername = async (username) => {
   try {
@@ -118,9 +119,22 @@ exports.login = async (req, res) => {
     // Fetch user roles and redirect
     const roles = await getUserRoles(user.Id);
 
+    const { token: authToken } = await generateToken(user.UserName);
+
+    const queryString = `
+    INSERT INTO Token (userId, token)
+    VALUES (@userId, @token)
+`;
+
+    await query('tdg', queryString, {
+      userId: user.Id,
+      token: Buffer.from(authToken, 'base64').toString('utf8'),
+    });
+
     return res.ok({
       message: 'Login successful',
       data: {
+        token: authToken,
         roles: roles || [],
       },
     });

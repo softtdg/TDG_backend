@@ -6,6 +6,9 @@ const config = {
   mongoUri: process.env.mongoUri,
   inventoryDomain: process.env.inventoryDomain,
   mongoDbName: process.env.mongoDbName,
+
+  SECRET: process.env.secret,
+  JWTEXPIRY: process.env.jwtexpiry,
   // Base SQL Server configuration
   sqlBaseConfig: {
     server: process.env.sqlServer,
