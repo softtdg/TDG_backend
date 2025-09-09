@@ -8,8 +8,15 @@ const app = express();
 
 const envPath = path.join(__dirname, `src/config/.env_${process.env.NODE_ENV}`);
 require('dotenv').config({ path: envPath, debug: false });
+// 🔹 MSSQL pool manager
+const {
+  initializeAllConnections,
+  closeAllConnections,
+} = require('./src/db/mssqlPool');
 
-require('./src/db/conn');
+// mongo connection
+const { connectDB, closeDB } = require('./src/db/conn');
+
 const routes = require('./src/routes/index');
 const { badRequest } = require('./src/utils/messages');
 app.use(require('./src/utils/responseHandler'));
@@ -65,6 +72,34 @@ app.use((error, req, res, next) => {
 });
 
 const server = http.createServer(app);
-server.listen(config.PORT, () => {
-  console.log(`Server Running At Port : ${config.PORT}`);
-});
+
+(async () => {
+  try {
+    // 🔹 Connect to MongoDB
+    await connectDB();
+    // 🔹 Initialize all MSSQL pools at startup
+    await initializeAllConnections();
+
+    server.listen(config.PORT, () => {
+      console.log(`🚀 Server Running At Port : ${config.PORT}`);
+    });
+
+    // 🔹 Graceful shutdown on exit
+    const shutdown = async () => {
+      console.log('\n🛑 Shutting down server...');
+      await closeAllConnections(); // MSSQL
+      await closeDB(); // MongoDB
+
+      server.close(() => {
+        console.log('✅ HTTP server closed');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGINT', shutdown); // Ctrl+C
+    process.on('SIGTERM', shutdown); // Kill command
+  } catch (err) {
+    console.error('❌ Failed to start server:', err);
+    process.exit(1);
+  }
+})();

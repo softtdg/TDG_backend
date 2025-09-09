@@ -1,20 +1,19 @@
 const crypto = require('crypto');
-const sql = require('mssql');
-const getDbPool = require('../db/mssqlPool');
+const { query } = require('../db/mssqlPool');
 
 const findByUsername = async (username) => {
   try {
-    const pool = await getDbPool('OVERVIEW');
-    const request = pool.request();
-    request.input('username', sql.NVarChar, username);
-
-    const result = await request.query(`
+    const result = await query(
+      'overview',
+      `
         SELECT *
-       FROM  [OVERVIEW].[dbo].[AspNetUsers] 
+        FROM AspNetUsers
         WHERE UserName = @username
-      `);
+      `,
+      { username },
+    );
 
-    return result.recordset[0] || null;
+    return result[0] || null;
   } catch (error) {
     console.error('Error fetching user:', error);
     throw error;
@@ -39,10 +38,6 @@ const verifyPassword = (password, passwordHash) => {
     const salt = hashBytes.slice(13, 13 + saltLength);
     const storedSubkey = hashBytes.slice(13 + saltLength);
 
-    console.log({ version, prf, iterations, saltLength });
-    console.log('Salt:', salt.toString('hex'));
-    console.log('StoredSubkey:', storedSubkey.toString('hex'));
-
     if (version !== 1 || prf !== 1) {
       console.log('Unsupported hash format');
       return false;
@@ -56,8 +51,6 @@ const verifyPassword = (password, passwordHash) => {
       'sha256',
     );
 
-    console.log('DerivedKey:', derivedKey.toString('hex'));
-
     return crypto.timingSafeEqual(derivedKey, storedSubkey);
   } catch (err) {
     console.error('Password verification error:', err);
@@ -68,18 +61,18 @@ const verifyPassword = (password, passwordHash) => {
 // Fetch user roles (read-only)
 const getUserRoles = async (userId) => {
   try {
-    const pool = await getDbPool('OVERVIEW');
-    const request = pool.request();
-    request.input('userId', sql.NVarChar, userId);
-
-    const result = await request.query(`
+    const result = await query(
+      'overview',
+      `
         SELECT r.Name as RoleName
-        FROM [OVERVIEW].[dbo].[AspNetUserRoles] ur
-        INNER JOIN [OVERVIEW].[dbo].[AspNetRoles] r ON ur.RoleId = r.Id
+        FROM AspNetUserRoles ur
+        INNER JOIN AspNetRoles r ON ur.RoleId = r.Id
         WHERE ur.UserId = @userId
-      `);
+      `,
+      { userId },
+    );
 
-    return result.recordset.map((record) => record.RoleName);
+    return result.map((record) => record.RoleName);
   } catch (error) {
     console.error('Error fetching user roles:', error);
     throw error;
