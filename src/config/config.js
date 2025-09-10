@@ -4,8 +4,10 @@ const config = {
   baseUri: process.env.baseURL,
   prefix: '/api',
   mongoUri: process.env.mongoUri,
-  inventoryDomain: process.env.inventoryDomain,
   mongoDbName: process.env.mongoDbName,
+  mongoUriTDG: process.env.mongoUriTDG,
+  mongoDbNameTDG: process.env.mongoDbNameTDG,
+  inventoryDomain: process.env.inventoryDomain,
 
   SECRET: process.env.secret,
   JWTEXPIRY: process.env.jwtexpiry,
@@ -36,7 +38,6 @@ const config = {
     electrical: process.env.electrical_database,
     overview: process.env.overview_database,
     purchasing: process.env.purchasing_database,
-    tdg: process.env.tdg_database,
   },
 
   // Generate database configurations dynamically
@@ -69,9 +70,6 @@ const config = {
   },
   get purchasing_config() {
     return this.getDatabaseConfig('purchasing');
-  },
-  get tdg_config() {
-    return this.getDatabaseConfig('tdg');
   },
 };
 module.exports = config;

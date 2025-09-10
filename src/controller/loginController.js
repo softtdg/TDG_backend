@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { query } = require('../db/mssqlPool');
 const { generateToken } = require('../utils/common');
+const TokensModel = require('../model/tokenModel');
 
 const findByUsername = async (username) => {
   try {
@@ -95,7 +96,7 @@ exports.login = async (req, res) => {
     const user = await findByUsername(UserName);
     if (!user) {
       return res.badRequest({
-        message: 'Username/password not found',
+        message: 'Username/password not found !!',
       });
     }
 
@@ -121,20 +122,18 @@ exports.login = async (req, res) => {
 
     const { token: authToken } = await generateToken(user.UserName);
 
-    const queryString = `
-    INSERT INTO Token (userId, token)
-    VALUES (@userId, @token)
-`;
+    const token = Buffer.from(authToken, 'base64').toString('utf8');
 
-    await query('tdg', queryString, {
+    // Create token in MongoDB
+    await TokensModel.create({
       userId: user.Id,
-      token: Buffer.from(authToken, 'base64').toString('utf8'),
+      token,
     });
 
     return res.ok({
       message: 'Login successful',
       data: {
-        token: authToken,
+        token,
         roles: roles || [],
       },
     });

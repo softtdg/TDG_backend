@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config/config');
 const { query } = require('../db/mssqlPool');
+const tokensModel = require('../model/tokenModel');
 
 const checkTokenValidity = async (token) =>
   new Promise((res, rej) => {
@@ -8,19 +9,14 @@ const checkTokenValidity = async (token) =>
       try {
         const decoded = jwt.verify(token, config.SECRET);
 
-        const tokenData = await query(
-          'tdg',
-          `
-            SELECT *
-            FROM Token
-            WHERE token = @token
-            `,
-          { token },
-        );
+        const tokenData = await tokensModel
+          .findOne({ token })
+          .sort({ createdAt: -1 });
 
-        if (tokenData.length && decoded) {
+        if (tokenData && decoded) {
           res({
             user: decoded.userName,
+            userId: tokenData.userId,
           });
         } else {
           rej('Your Token Is Expire.....!!');
@@ -37,8 +33,6 @@ module.exports = async (req, res, next) => {
   if (!token) {
     return res.unAuthorizedRequest({ message: 'Token Not Found....' });
   }
-
-  token = Buffer.from(token, 'base64').toString('utf8');
 
   checkTokenValidity(token)
     .then(async (result) => {
@@ -57,7 +51,7 @@ module.exports = async (req, res, next) => {
       }
 
       if (userData.length) {
-        res.locals.userNAme = result.userName;
+        res.locals.userNAme = userData[0].UserName;
         return next();
       }
 

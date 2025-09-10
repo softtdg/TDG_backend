@@ -1,12 +1,8 @@
-const sql = require('mssql');
 const ExcelJS = require('exceljs');
 const path = require('path');
-const getDbPool = require('../db/mssqlPool');
 const { connectDB } = require('../db/conn');
 const axios = require('axios');
 const os = require('os');
-const fs = require('fs');
-const fsp = require('fs/promises');
 const config = require('../config/config');
 const { query } = require('../db/mssqlPool');
 
@@ -15,7 +11,7 @@ exports.testing = async (req, res) => {
     const result = await query('sop', 'SELECT TOP 2 * FROM SOPs');
 
     const db = await connectDB();
-    const collection = db.collection('Fixture');
+    const collection = db.BOMs.collection('Fixture');
 
     // Demo: Get all documents
     const datas = await collection.find({}).limit(10).toArray();
@@ -195,8 +191,8 @@ const fixFixtureName = (fixture) => {
 };
 
 const getExplodedBOM = async (fixtureName, db) => {
-  const Fixtures = db.collection('Fixture');
-  const PDMSubAssemblies = db.collection('PDMSubAssembly');
+  const Fixtures = db.BOMs.collection('Fixture');
+  const PDMSubAssemblies = db.BOMs.collection('PDMSubAssembly');
 
   // Find matching fixture by name
   const tempResult = await Fixtures.find({ Name: fixtureName }).toArray();
@@ -398,7 +394,7 @@ const explodeFixture = (item, fixturePool) => {
 const getStoredFixture = async (fixtureNumber, db) => {
   if (!fixtureNumber) return null;
 
-  const collection = db.collection('Fixture'); // Adjust name if needed
+  const collection = db.BOMs.collection('Fixture'); // Adjust name if needed
 
   const result = await collection
     .find({ Name: fixtureNumber })
@@ -1336,7 +1332,7 @@ const generatePickLists = async (vmParam, userParam, fixtureParam, res) => {
         };
       }
 
-      const db = await connectDB('BOMs');
+      const db = await connectDB();
       const tempFixture = await getExplodedBOM(fixture, db);
       const refFixture = await getStoredFixture(fixture, db);
 
@@ -1674,9 +1670,9 @@ const getPickListData = async (lhrEntryId, user, fixtureParam) => {
         };
       }
 
-      const db = await connectDB('BOMs');
-      const tempFixture = await getExplodedBOM(fixture, db);
-      const refFixture = await getStoredFixture(fixture, db);
+      const databases = await connectDB();
+      const tempFixture = await getExplodedBOM(fixture, databases);
+      const refFixture = await getStoredFixture(fixture, databases);
 
       // Process components in parallel
       const tempComponents = await Promise.all(
@@ -2682,7 +2678,7 @@ exports.SOPSerchService = async (req, res) => {
     );
 
     const db = await connectDB();
-    const collection = db.collection('Fixture');
+    const collection = db.BOMs.collection('Fixture');
 
     // Process all fixtures
     const fixturesDetailed = await Promise.all(
@@ -2748,7 +2744,7 @@ exports.fixtureDetails = async (req, res) => {
     const fixedFixtureNumber = fixFixtureName(fixtureNumber);
 
     const db = await connectDB();
-    const collection = db.collection('Fixture');
+    const collection = db.BOMs.collection('Fixture');
     // Get MongoDB data for this fixture
     const fixtureMongoData = await collection
       .find({ Name: fixedFixtureNumber })
