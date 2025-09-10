@@ -1202,6 +1202,22 @@ async function addSOP(
       totalQty === 0 || // No quantity
       locationNumberCheck; // Location in wrong number format
 
+    // here check location exist but not number- number -number format
+    // not consumable
+    // not VMI
+    // not V (but not HV)
+    // this all condition is false then set row to white
+    let shouldBeWhite;
+    if (comp.Location) {
+      // Check for conditions that should set row to white
+      shouldBeWhite =
+        comp.Location && // Location exists
+        !isConsumable && // Not consumable
+        !loc.includes('VMI') && // Not VMI
+        !(loc.includes('V') && !loc.includes('HV')) && // Not V (but not HV)
+        !locationNumberCheck; // Location not in number-number-number format
+    }
+
     // Apply gray fill for conditions (based on consumable, missing location, etc.)
     if (isGray) {
       for (let c = 1; c <= 9; c++) {
@@ -1209,6 +1225,16 @@ async function addSOP(
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: 'FFD3D3D3' }, // light gray color
+        };
+      }
+    }
+
+    if (shouldBeWhite) {
+      for (let c = 1; c <= 9; c++) {
+        row.getCell(c).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFFFF' }, // white color
         };
       }
     }
@@ -1568,6 +1594,16 @@ function buildPicklistData(components, fixtureDescription, Quantity) {
       locationNumberCheck
     ) {
       isGray = true;
+    }
+
+    if (
+      comp.Location && // Location exists
+      !isConsumable && // Not consumable
+      !loc.includes('VMI') && // Not VMI
+      !(loc.includes('V') && !loc.includes('HV')) && // Not V (but not HV)
+      !locationNumberCheck
+    ) {
+      isGray = false;
     }
 
     listData.push({
@@ -2378,6 +2414,22 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
         totalQty === 0 || // No quantity
         locationNumberCheck; // Location in wrong number format
 
+      // here check location exist but not number- number -number format
+      // not consumable
+      // not VMI
+      // not V (but not HV)
+      // this all condition is false then set row to white
+      let shouldBeWhite;
+      if (comp.Location) {
+        // Check for conditions that should set row to white
+        shouldBeWhite =
+          comp.Location && // Location exists
+          !isConsumable && // Not consumable
+          !loc.includes('VMI') && // Not VMI
+          !(loc.includes('V') && !loc.includes('HV')) && // Not V (but not HV)
+          !locationNumberCheck; // Location not in number-number-number format
+      }
+
       // Apply gray fill for conditions (based on consumable, missing location, etc.)
       if (isGray) {
         for (let c = 1; c <= 9; c++) {
@@ -2385,6 +2437,16 @@ const updatedSheetDownload = async (excelFixtureDetail, sheetlistData, res) => {
             type: 'pattern',
             pattern: 'solid',
             fgColor: { argb: 'FFD3D3D3' }, // light gray color
+          };
+        }
+      }
+
+      if (shouldBeWhite) {
+        for (let c = 1; c <= 9; c++) {
+          row.getCell(c).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFFFF' }, // white color
           };
         }
       }
